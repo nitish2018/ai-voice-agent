@@ -40,16 +40,6 @@ async def handle_retell_webhook(
         # Parse the webhook payload
         payload_dict = json.loads(body.decode('utf-8'))
         payload = RetellWebhookPayload(**payload_dict)
-
-        # Write raw payload (exact webhook body)
-        with open("/home/nitish/Downloads/payload.txt", "a", encoding="utf-8") as f:
-            f.write(body.decode("utf-8", errors="replace"))
-            f.write("\n\n---\n\n")
-
-        # Write parsed payload_dict
-        with open("/home/nitish/Downloads/payload_dict.txt", "a", encoding="utf-8") as f:
-            f.write(json.dumps(payload_dict, indent=2))
-            f.write("\n\n---\n\n")
         
         logger.info(f"Received Retell webhook: {payload.event} for call {payload.call.call_id}")
         

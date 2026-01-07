@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Save, Loader2, Volume2, Mic, Zap, VolumeX, Clock } from 'lucide-react';
+import { Settings, Save, Loader2, Volume2, Mic, Zap, VolumeX, Clock, Cpu, Radio } from 'lucide-react';
 import {
   Button,
   Input,
@@ -11,7 +11,7 @@ import {
   CardContent
 } from '@/components/ui';
 import { agentApi } from '@/lib/api';
-import type { Agent, AgentCreate, VoiceSettings } from '@/types';
+import type { Agent, AgentCreate, VoiceSettings, VoiceSystem, PipelineConfig } from '@/types';
 
 interface AgentConfigFormProps {
   agent?: Agent;
@@ -43,9 +43,38 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
   const [formData, setFormData] = useState<AgentCreate>({
     name: agent?.name || '',
     description: agent?.description || '',
+    voice_system: (agent?.voice_system as VoiceSystem) || 'retell',
     system_prompt: agent?.system_prompt || '',
-    begin_message: agent?.begin_message || '',
     voice_settings: agent?.voice_settings || defaultVoiceSettings,
+    pipeline_config: agent?.pipeline_config || {
+      stt_config: {
+        service: 'deepgram',
+        deepgram: {
+          model: 'nova-2',
+          language: 'en-US',
+          interim_results: true
+        }
+      },
+      tts_config: {
+        service: 'cartesia',
+        cartesia: {
+          voice_id: '0ad65e7f-006c-47cf-bd31-52279d487913', // British Man
+          model_id: 'sonic-english',
+          language: 'en',
+          speed: 1.0
+        }
+      },
+      llm_config: {
+        service: 'openai',
+        openai: {
+          model: 'gpt-4o',
+          temperature: 0.7
+        }
+      },
+      transport: 'daily_webrtc',
+      enable_interruptions: true,
+      vad_enabled: true,
+    },
     emergency_triggers: agent?.emergency_triggers || [
       'accident', 'blowout', 'emergency', 'breakdown', 'medical', 'help'
     ],
@@ -57,7 +86,8 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
   ) => {
     const { name, value, type } = e.target;
 
-    if (name.startsWith('voice_')) {
+    // Special handling for voice_settings fields (but not voice_system!)
+    if (name.startsWith('voice_') && name !== 'voice_system') {
       const voiceKey = name.replace('voice_', '') as keyof VoiceSettings;
       setFormData(prev => ({
         ...prev,
@@ -149,6 +179,25 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
           </div>
 
           <div>
+            <label htmlFor="voice_system" className="form-label">Voice System *</label>
+            <select
+              id="voice_system"
+              name="voice_system"
+              value={formData.voice_system}
+              onChange={handleInputChange}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="retell">Retell AI</option>
+              <option value="pipecat">Pipecat</option>
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              {formData.voice_system === 'pipecat' 
+                ? 'Pipecat: Multi-service voice framework with flexible STT/TTS/LLM providers'
+                : 'Retell AI: Managed voice infrastructure with built-in LLM'}
+            </p>
+          </div>
+
+          <div>
             <label htmlFor="system_prompt" className="form-label">System Prompt *</label>
             <Textarea
               id="system_prompt"
@@ -165,20 +214,411 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
             </p>
           </div>
 
-          <div>
-            <label htmlFor="begin_message" className="form-label">Opening Message</label>
-            <Input
-              id="begin_message"
-              name="begin_message"
-              value={formData.begin_message}
-              onChange={handleInputChange}
-              placeholder="Hi, this is Dispatch calling about your load..."
-            />
-          </div>
         </CardContent>
       </Card>
 
+      {/* Pipecat Pipeline Configuration */}
+      {formData.voice_system === 'pipecat' && formData.pipeline_config && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Radio className="w-5 h-5" />
+              Pipecat Pipeline Configuration
+            </CardTitle>
+            <CardDescription>
+              Configure STT, TTS, LLM services and transport for Pipecat
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* STT Configuration */}
+            <div className="space-y-3">
+              <h4 className="font-semibold flex items-center gap-2">
+                <Mic className="w-4 h-4" />
+                Speech-to-Text (STT)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label">STT Service</label>
+                  <select
+                    value={formData.pipeline_config.stt_config.service}
+                    onChange={(e) => {
+                      const service = e.target.value as any;
+                      const defaultModel = service === 'deepgram' ? 'nova-2' : service === 'azure_speech' ? 'en-US' : 'best';
+                      setFormData(prev => ({
+                        ...prev,
+                        pipeline_config: {
+                          ...prev.pipeline_config!,
+                          stt_config: {
+                            service,
+                            deepgram: service === 'deepgram' ? { model: defaultModel, language: 'en-US', interim_results: true } : prev.pipeline_config!.stt_config.deepgram,
+                            azure_speech: service === 'azure_speech' ? { language: 'en-US', recognition_mode: 'conversation' } : prev.pipeline_config!.stt_config.azure_speech,
+                            assemblyai: service === 'assemblyai' ? { language: 'en_us' } : prev.pipeline_config!.stt_config.assemblyai
+                          }
+                        }
+                      }));
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="deepgram">Deepgram</option>
+                    <option value="azure_speech">Azure Speech</option>
+                    <option value="assemblyai">AssemblyAI</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Model</label>
+                  <select
+                    value={
+                      formData.pipeline_config.stt_config.service === 'deepgram' 
+                        ? formData.pipeline_config.stt_config.deepgram?.model || 'nova-2'
+                        : formData.pipeline_config.stt_config.service === 'azure_speech'
+                        ? formData.pipeline_config.stt_config.azure_speech?.language || 'en-US'
+                        : 'best'
+                    }
+                    onChange={(e) => {
+                      const service = formData.pipeline_config.stt_config.service;
+                      setFormData(prev => ({
+                        ...prev,
+                        pipeline_config: {
+                          ...prev.pipeline_config!,
+                          stt_config: {
+                            ...prev.pipeline_config!.stt_config,
+                            deepgram: service === 'deepgram' ? { ...prev.pipeline_config!.stt_config.deepgram!, model: e.target.value } : prev.pipeline_config!.stt_config.deepgram,
+                            azure_speech: service === 'azure_speech' ? { ...prev.pipeline_config!.stt_config.azure_speech!, language: e.target.value } : prev.pipeline_config!.stt_config.azure_speech,
+                          }
+                        }
+                      }));
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    {formData.pipeline_config.stt_config.service === 'deepgram' && (
+                      <>
+                        <option value="nova-2">Nova 2 (Latest)</option>
+                        <option value="nova">Nova</option>
+                        <option value="enhanced">Enhanced</option>
+                        <option value="base">Base</option>
+                      </>
+                    )}
+                    {formData.pipeline_config.stt_config.service === 'azure_speech' && (
+                      <>
+                        <option value="en-US">English (US)</option>
+                        <option value="en-GB">English (UK)</option>
+                        <option value="es-ES">Spanish</option>
+                        <option value="fr-FR">French</option>
+                      </>
+                    )}
+                    {formData.pipeline_config.stt_config.service === 'assemblyai' && (
+                      <>
+                        <option value="best">Best</option>
+                        <option value="nano">Nano (Fast)</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* TTS Configuration */}
+            <div className="space-y-3">
+              <h4 className="font-semibold flex items-center gap-2">
+                <Volume2 className="w-4 h-4" />
+                Text-to-Speech (TTS)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="form-label">TTS Service</label>
+                  <select
+                    value={formData.pipeline_config.tts_config.service}
+                    onChange={(e) => {
+                      const service = e.target.value as any;
+                      const defaults = {
+                        cartesia: { voice_id: '0ad65e7f-006c-47cf-bd31-52279d487913', model_id: 'sonic-english', language: 'en', speed: 1.0 }, // British Man
+                        eleven_labs: { voice_id: '21m00Tcm4TlvDq8ikWAM', model_id: 'eleven_turbo_v2_5', stability: 0.5, similarity_boost: 0.75, speed: 1.0 },
+                        azure_tts: { voice: 'en-US-AriaNeural', language: 'en-US', speed: 1.0 }
+                      };
+                      setFormData(prev => ({
+                        ...prev,
+                        pipeline_config: {
+                          ...prev.pipeline_config!,
+                          tts_config: {
+                            service,
+                            cartesia: service === 'cartesia' ? defaults.cartesia : prev.pipeline_config!.tts_config.cartesia,
+                            eleven_labs: service === 'eleven_labs' ? defaults.eleven_labs : prev.pipeline_config!.tts_config.eleven_labs,
+                            azure_tts: service === 'azure_tts' ? defaults.azure_tts : prev.pipeline_config!.tts_config.azure_tts
+                          }
+                        }
+                      }));
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="cartesia">Cartesia</option>
+                    <option value="eleven_labs">ElevenLabs</option>
+                    <option value="azure_tts">Azure TTS</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Voice</label>
+                  <select
+                    value={
+                      formData.pipeline_config.tts_config.service === 'cartesia'
+                        ? formData.pipeline_config.tts_config.cartesia?.voice_id || '79a125e8-cd45-4c13-8a67-188112f4dd22'
+                        : formData.pipeline_config.tts_config.service === 'eleven_labs'
+                        ? formData.pipeline_config.tts_config.eleven_labs?.voice_id || '21m00Tcm4TlvDq8ikWAM'
+                        : formData.pipeline_config.tts_config.azure_tts?.voice || 'en-US-AriaNeural'
+                    }
+                    onChange={(e) => {
+                      const service = formData.pipeline_config.tts_config.service;
+                      setFormData(prev => ({
+                        ...prev,
+                        pipeline_config: {
+                          ...prev.pipeline_config!,
+                          tts_config: {
+                            ...prev.pipeline_config!.tts_config,
+                            cartesia: service === 'cartesia' ? { ...prev.pipeline_config!.tts_config.cartesia!, voice_id: e.target.value } : prev.pipeline_config!.tts_config.cartesia,
+                            eleven_labs: service === 'eleven_labs' ? { ...prev.pipeline_config!.tts_config.eleven_labs!, voice_id: e.target.value } : prev.pipeline_config!.tts_config.eleven_labs,
+                            azure_tts: service === 'azure_tts' ? { ...prev.pipeline_config!.tts_config.azure_tts!, voice: e.target.value } : prev.pipeline_config!.tts_config.azure_tts
+                          }
+                        }
+                      }));
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    {formData.pipeline_config.tts_config.service === 'cartesia' && (
+                      <>
+                        <option value="47c38ca4-5f35-497b-b1a3-415245fb35e1">English Man</option>
+                        <option value="0ad65e7f-006c-47cf-bd31-52279d487913">British Man</option>
+                        <option value="e07c00bc-4134-4eae-9ea4-1a55fb45746b">English Girl</option>
+                      </>
+                    )}
+                    {formData.pipeline_config.tts_config.service === 'eleven_labs' && (
+                      <>
+                        <option value="21m00Tcm4TlvDq8ikWAM">Rachel (Female)</option>
+                        <option value="AZnzlk1XvdvUeBnXmlld">Domi (Female)</option>
+                        <option value="EXAVITQu4vr4xnSDxMaL">Bella (Female)</option>
+                        <option value="ErXwobaYiN019PkySvjV">Antoni (Male)</option>
+                        <option value="MF3mGyEYCl7XYWbV9V6O">Elli (Female)</option>
+                        <option value="TxGEqnHWrfWFTfGW9XjX">Josh (Male)</option>
+                        <option value="VR6AewLTigWG4xSOukaG">Arnold (Male)</option>
+                        <option value="pNInz6obpgDQGcFmaJgB">Adam (Male)</option>
+                      </>
+                    )}
+                    {formData.pipeline_config.tts_config.service === 'azure_tts' && (
+                      <>
+                        <option value="en-US-AriaNeural">Aria (Female)</option>
+                        <option value="en-US-JennyNeural">Jenny (Female)</option>
+                        <option value="en-US-GuyNeural">Guy (Male)</option>
+                        <option value="en-GB-SoniaNeural">Sonia (UK Female)</option>
+                        <option value="en-GB-RyanNeural">Ryan (UK Male)</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Model</label>
+                  <select
+                    value={
+                      formData.pipeline_config.tts_config.service === 'cartesia'
+                        ? formData.pipeline_config.tts_config.cartesia?.model_id || 'sonic-english'
+                        : formData.pipeline_config.tts_config.service === 'eleven_labs'
+                        ? formData.pipeline_config.tts_config.eleven_labs?.model_id || 'eleven_turbo_v2_5'
+                        : 'standard'
+                    }
+                    onChange={(e) => {
+                      const service = formData.pipeline_config.tts_config.service;
+                      setFormData(prev => ({
+                        ...prev,
+                        pipeline_config: {
+                          ...prev.pipeline_config!,
+                          tts_config: {
+                            ...prev.pipeline_config!.tts_config,
+                            cartesia: service === 'cartesia' ? { ...prev.pipeline_config!.tts_config.cartesia!, model_id: e.target.value } : prev.pipeline_config!.tts_config.cartesia,
+                            eleven_labs: service === 'eleven_labs' ? { ...prev.pipeline_config!.tts_config.eleven_labs!, model_id: e.target.value } : prev.pipeline_config!.tts_config.eleven_labs,
+                          }
+                        }
+                      }));
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    {formData.pipeline_config.tts_config.service === 'cartesia' && (
+                      <>
+                        <option value="sonic-english">Sonic English</option>
+                        <option value="sonic-multilingual">Sonic Multilingual</option>
+                      </>
+                    )}
+                    {formData.pipeline_config.tts_config.service === 'eleven_labs' && (
+                      <>
+                        <option value="eleven_turbo_v2_5">Turbo v2.5 (Fastest)</option>
+                        <option value="eleven_turbo_v2">Turbo v2</option>
+                        <option value="eleven_monolingual_v1">Monolingual v1</option>
+                        <option value="eleven_multilingual_v2">Multilingual v2</option>
+                      </>
+                    )}
+                    {formData.pipeline_config.tts_config.service === 'azure_tts' && (
+                      <>
+                        <option value="standard">Standard</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+              
+              {/* TTS Speed Slider */}
+              <div className="mt-4">
+                <label className="form-label">
+                  Speech Speed ({
+                    formData.pipeline_config.tts_config.service === 'cartesia'
+                      ? (formData.pipeline_config.tts_config.cartesia?.speed || 1.0).toFixed(2)
+                      : formData.pipeline_config.tts_config.service === 'eleven_labs'
+                      ? (formData.pipeline_config.tts_config.eleven_labs?.speed || 1.0).toFixed(2)
+                      : (formData.pipeline_config.tts_config.azure_tts?.speed || 1.0).toFixed(2)
+                  }x)
+                </label>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2.0"
+                  step="0.1"
+                  value={
+                    formData.pipeline_config.tts_config.service === 'cartesia'
+                      ? formData.pipeline_config.tts_config.cartesia?.speed || 1.0
+                      : formData.pipeline_config.tts_config.service === 'eleven_labs'
+                      ? formData.pipeline_config.tts_config.eleven_labs?.speed || 1.0
+                      : formData.pipeline_config.tts_config.azure_tts?.speed || 1.0
+                  }
+                  onChange={(e) => {
+                    const speed = parseFloat(e.target.value);
+                    const service = formData.pipeline_config.tts_config.service;
+                    setFormData(prev => ({
+                      ...prev,
+                      pipeline_config: {
+                        ...prev.pipeline_config!,
+                        tts_config: {
+                          ...prev.pipeline_config!.tts_config,
+                          cartesia: service === 'cartesia' ? { ...prev.pipeline_config!.tts_config.cartesia!, speed } : prev.pipeline_config!.tts_config.cartesia,
+                          eleven_labs: service === 'eleven_labs' ? { ...prev.pipeline_config!.tts_config.eleven_labs!, speed } : prev.pipeline_config!.tts_config.eleven_labs,
+                          azure_tts: service === 'azure_tts' ? { ...prev.pipeline_config!.tts_config.azure_tts!, speed } : prev.pipeline_config!.tts_config.azure_tts
+                        }
+                      }
+                    }));
+                  }}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>0.5x (Slower)</span>
+                  <span>1.0x (Normal)</span>
+                  <span>2.0x (Faster)</span>
+                </div>
+              </div>
+            </div>
+
+            {/* LLM Configuration */}
+            <div className="space-y-3">
+              <h4 className="font-semibold flex items-center gap-2">
+                <Cpu className="w-4 h-4" />
+                Language Model (LLM)
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label">LLM Service</label>
+                  <select
+                    value={formData.pipeline_config.llm_config.service}
+                    onChange={(e) => {
+                      const service = e.target.value as any;
+                      const defaultModel = service === 'openai' ? 'gpt-4o' : 'claude-3-5-sonnet-20241022';
+                      setFormData(prev => ({
+                        ...prev,
+                        pipeline_config: {
+                          ...prev.pipeline_config!,
+                          llm_config: {
+                            service,
+                            model: defaultModel,
+                            openai: service === 'openai' ? { model: defaultModel, temperature: 0.7 } : prev.pipeline_config!.llm_config.openai,
+                            anthropic: service === 'anthropic' ? { model: defaultModel, temperature: 0.7, max_tokens: 1024 } : prev.pipeline_config!.llm_config.anthropic
+                          }
+                        }
+                      }));
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Model</label>
+                  <select
+                    value={formData.pipeline_config.llm_config.model}
+                    onChange={(e) => {
+                      const service = formData.pipeline_config.llm_config.service;
+                      setFormData(prev => ({
+                        ...prev,
+                        pipeline_config: {
+                          ...prev.pipeline_config!,
+                          llm_config: {
+                            ...prev.pipeline_config!.llm_config,
+                            model: e.target.value,
+                            openai: service === 'openai' ? { ...prev.pipeline_config!.llm_config.openai!, model: e.target.value } : prev.pipeline_config!.llm_config.openai,
+                            anthropic: service === 'anthropic' ? { ...prev.pipeline_config!.llm_config.anthropic!, model: e.target.value } : prev.pipeline_config!.llm_config.anthropic
+                          }
+                        }
+                      }));
+                    }}
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    {formData.pipeline_config.llm_config.service === 'openai' && (
+                      <>
+                        <option value="gpt-4o">GPT-4o (Latest)</option>
+                        <option value="gpt-4o-mini">GPT-4o Mini (Faster)</option>
+                        <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                        <option value="gpt-4">GPT-4</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                      </>
+                    )}
+                    {formData.pipeline_config.llm_config.service === 'anthropic' && (
+                      <>
+                        <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet (Latest)</option>
+                        <option value="claude-3-5-haiku-20241022">Claude 3.5 Haiku (Faster)</option>
+                        <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                        <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                        <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Transport Configuration */}
+            <div className="space-y-3">
+              <h4 className="font-semibold flex items-center gap-2">
+                <Radio className="w-4 h-4" />
+                Transport
+              </h4>
+              <div>
+                <select
+                  value={formData.pipeline_config.transport}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    pipeline_config: {
+                      ...prev.pipeline_config!,
+                      transport: e.target.value as any
+                    }
+                  }))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="daily_webrtc">Daily.co WebRTC (Recommended)</option>
+                  <option value="websocket">WebSocket</option>
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  WebRTC provides better audio quality and lower latency
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Voice Settings */}
+      {formData.voice_system === 'retell' && (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -280,6 +720,7 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Call Settings */}
       <Card>

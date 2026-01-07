@@ -13,6 +13,9 @@ supabase>=2.4.0,<3.0.0
 # Retell AI
 retell-sdk>=4.0.0,<5.0.0
 
+# Pipecat AI framework
+pipecat-ai[daily,deepgram,openai,anthropic,cartesia,silero]>=0.0.40
+
 # OpenAI for transcript processing
 openai>=1.12.0,<2.0.0
 

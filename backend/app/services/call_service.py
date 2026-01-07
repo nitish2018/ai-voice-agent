@@ -493,11 +493,19 @@ class CallService:
     def _map_results_to_response(self, row: dict) -> CallResultsResponse:
         """Map database row to call results response."""
         from app.schemas.call import CallOutcome, DriverStatus, EmergencyType
+        
+        # Handle old invalid call_outcome values gracefully
+        call_outcome_str = row.get("call_outcome", "Unknown")
+        try:
+            call_outcome = CallOutcome(call_outcome_str)
+        except ValueError:
+            logger.warning(f"Invalid call_outcome '{call_outcome_str}', using Unknown")
+            call_outcome = CallOutcome.UNKNOWN  # Fallback to Unknown
 
         return CallResultsResponse(
             id=row["id"],
             call_id=row["call_id"],
-            call_outcome=CallOutcome(row["call_outcome"]),
+            call_outcome=call_outcome,
             is_emergency=row.get("is_emergency", False),
             driver_status=DriverStatus(row["driver_status"]) if row.get("driver_status") else None,
             current_location=row.get("current_location"),

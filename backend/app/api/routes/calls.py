@@ -1,6 +1,9 @@
 """
 Call API routes for triggering and managing voice calls.
 """
+import logging
+import uuid
+from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
@@ -11,9 +14,22 @@ from app.schemas.call import (
     CallStatus,
     CallResultsResponse,
 )
+from app.schemas.agent import VoiceSystem
+from app.schemas.pipeline import PipecatCallRequest
 from app.services.call_service import get_call_service
+from app.services.agent_service import get_agent_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/calls", tags=["calls"])
+
+# Check if Pipecat is available
+try:
+    from app.services.pipecat_service import get_pipecat_service
+    PIPECAT_AVAILABLE = True
+except ImportError:
+    PIPECAT_AVAILABLE = False
+    logger.warning("Pipecat service not available")
 
 
 @router.post("/trigger", response_model=CallResponse, status_code=201)
@@ -22,8 +38,8 @@ async def trigger_call(request: CallTriggerRequest):
     Trigger a new outbound call.
     
     This initiates a web call from the configured voice agent.
-    The driver's name, phone number, and load number provide context
-    for the call.
+    The call is intelligently routed to either Retell or Pipecat
+    based on the agent's voice_system configuration.
     
     Args:
         request: Call trigger request containing:
@@ -38,11 +54,112 @@ async def trigger_call(request: CallTriggerRequest):
         Call response with call ID and status
     """
     try:
+        agent_service = get_agent_service()
+        agent = await agent_service.get_agent(request.agent_id)
+        if not agent:
+            raise HTTPException(status_code=404, detail=f"Agent {request.agent_id} not found")
+
         call_service = get_call_service()
-        return await call_service.trigger_call(request)
+
+        if agent.voice_system == VoiceSystem.PIPECAT.value:
+            logger.info(f"Routing call to Pipecat service for agent {request.agent_id}")
+            if not PIPECAT_AVAILABLE:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Pipecat service is not available. Install pipecat dependencies: "
+                           "pip install 'pipecat-ai[daily,deepgram,openai,anthropic,silero]'"
+                )
+            if not agent.pipeline_config:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Agent {request.agent_id} has no pipeline configuration"
+                )
+
+            pipecat_service = get_pipecat_service()
+            pipecat_request = PipecatCallRequest(
+                agent_id=request.agent_id,
+                driver_name=request.driver_name,
+                load_number=request.load_number,
+                origin=request.origin,
+                destination=request.destination,
+                expected_eta=request.expected_eta,
+                additional_context=request.additional_context
+            )
+
+            from app.schemas.pipeline import PipelineConfig
+            logger.info(f"Agent pipeline_config from DB: {agent.pipeline_config}")
+            pipeline_config = PipelineConfig(**agent.pipeline_config)
+            
+            # Detailed TTS logging
+            if pipeline_config.tts_config.service == 'cartesia':
+                logger.info(f"TTS Service: Cartesia")
+                logger.info(f"Voice ID from config: {pipeline_config.tts_config.cartesia.voice_id}")
+                logger.info(f"Model ID: {pipeline_config.tts_config.cartesia.model_id}")
+                logger.info(f"Speed: {pipeline_config.tts_config.cartesia.speed}")
+            else:
+                logger.info(f"TTS Service: {pipeline_config.tts_config.service}")
+
+            pipecat_response = await pipecat_service.start_call(
+                request=pipecat_request,
+                agent_config=pipeline_config,
+                system_prompt=agent.system_prompt
+            )
+
+            # Create call record in database
+            call_id = str(uuid.uuid4())
+            now = datetime.utcnow()
+
+            call_data = {
+                "id": call_id,
+                "agent_id": request.agent_id,
+                "driver_name": request.driver_name,
+                "load_number": request.load_number,
+                "origin": request.origin,
+                "destination": request.destination,
+                "status": CallStatus.PENDING.value,
+                "retell_call_id": pipecat_response.session_id,  # Store session_id here
+                "created_at": now.isoformat(),
+                "updated_at": now.isoformat(),
+            }
+
+            # Store in database
+            from app.db.database import get_supabase_client, Tables
+            db = get_supabase_client()
+            result = db.table(Tables.CALLS).insert(call_data).execute()
+
+            # Return response
+            call_record = result.data[0].copy()
+            call_record["status"] = CallStatus(call_record["status"])
+            call_record["created_at"] = datetime.fromisoformat(call_record["created_at"].replace("Z", "+00:00"))
+            call_record["updated_at"] = datetime.fromisoformat(call_record["updated_at"].replace("Z", "+00:00"))
+            response = CallResponse(**call_record)
+
+            # Add URL for connecting (Daily or WebSocket)
+            if pipecat_response.daily_room_url:
+                response.access_token = pipecat_response.daily_room_url
+            elif pipecat_response.websocket_url:
+                response.access_token = pipecat_response.websocket_url
+
+            logger.info(f"Triggered Pipecat call: {call_id} with session {pipecat_response.session_id}")
+
+            return response
+
+        elif agent.voice_system == VoiceSystem.RETELL.value:
+            logger.info(f"Routing call to Retell service for agent {request.agent_id}")
+            if not agent.retell_agent_id:
+                raise ValueError(f"Agent {request.agent_id} not configured with Retell")
+            return await call_service.trigger_call(request)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported voice system: {agent.voice_system}"
+            )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Failed to trigger call: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

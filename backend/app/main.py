@@ -4,20 +4,48 @@ AI Voice Agent API - Main Application Entry Point.
 A FastAPI application for managing AI voice agents for logistics dispatch.
 """
 import logging
+import logging.handlers
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.api.routes import agents_router, calls_router
+from app.api.routes.pipecat_calls import router as pipecat_router
 from app.api.webhooks import retell_router
 
-# Configure logging
-logging.basicConfig(
-    level=logging.DEBUG if settings.debug else logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+# Configure logging with file handler
+log_dir = os.path.expanduser("~/logs")
+os.makedirs(log_dir, exist_ok=True)
+log_file_path = os.path.join(log_dir, "backend.log")
+
+# Remove existing handlers to prevent duplicate logs
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
+# Console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+console_handler.setFormatter(console_formatter)
+logging.root.addHandler(console_handler)
+
+# File handler with rotation
+file_handler = logging.handlers.RotatingFileHandler(
+    log_file_path,
+    maxBytes=10 * 1024 * 1024,  # 10 MB
+    backupCount=5
 )
+file_handler.setLevel(logging.DEBUG)
+file_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+file_handler.setFormatter(file_formatter)
+logging.root.addHandler(file_handler)
+
+logging.root.setLevel(logging.DEBUG)  # Set root logger to DEBUG to capture all messages
+
 logger = logging.getLogger(__name__)
+logger.info(f"Logging to file: {log_file_path}")
 
 
 @asynccontextmanager
@@ -73,6 +101,7 @@ app.add_middleware(
 # Include routers
 app.include_router(agents_router, prefix="/api")
 app.include_router(calls_router, prefix="/api")
+app.include_router(pipecat_router, prefix="/api")
 app.include_router(retell_router)
 
 

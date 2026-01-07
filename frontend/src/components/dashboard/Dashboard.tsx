@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Phone, Bot, Settings, RefreshCw, Plus, X } from 'lucide-react';
 import { Button, Badge } from '@/components/ui';
-import { CallTriggerForm, CallList, CallResultsView, WebCallInterface } from '@/components/call';
+import { CallTriggerForm, CallList, CallResultsView, WebCallInterface, PipecatCallInterface } from '@/components/call';
 import { AgentConfigForm, AgentList } from '@/components/agent';
 import { agentApi, callApi } from '@/lib/api';
 import type { Agent, Call } from '@/types';
@@ -234,7 +234,11 @@ function CallsTab({
       <div className="lg:col-span-2">
         {activeCall && activeCall.access_token ? (
           <div className="animate-fade-in">
-            <WebCallInterface call={activeCall} onCallEnded={onCallEnded} />
+            {activeCall.agent_id && agents.find(a => a.id === activeCall.agent_id)?.voice_system === 'pipecat' ? (
+              <PipecatCallInterface call={activeCall} onCallEnded={onCallEnded} />
+            ) : (
+              <WebCallInterface call={activeCall} onCallEnded={onCallEnded} />
+            )}
           </div>
         ) : selectedCall ? (
           <div className="animate-fade-in">

@@ -7,15 +7,36 @@ import {
   Clock, 
   FileText,
   Shield,
-  Phone
+  Phone,
+  DollarSign,
+  Mic,
+  Volume2,
+  Cpu,
+  Activity
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Badge } from '@/components/ui';
 import { getOutcomeColor } from '@/lib/utils';
-import type { Call, CallResults } from '@/types';
+import type { Call, CallResults, CostBreakdown, ServiceCost } from '@/types';
 
 interface CallResultsViewProps {
   call: Call;
 }
+
+// Helper for currency formatting
+const formatCurrency = (amount?: number) =>
+  amount != null ? `$${amount.toFixed(4)}` : '$0.0000';
+
+// Helper for duration formatting
+const formatDuration = (seconds?: number) => {
+  if (seconds == null) return '0m 0s';
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+  return `${minutes}m ${remainingSeconds}s`;
+};
+
+// Helper for unit formatting
+const formatUnits = (units?: number, decimals = 0) =>
+  units != null ? units.toFixed(decimals) : '0';
 
 export function CallResultsView({ call }: CallResultsViewProps) {
   const results = call.results;
@@ -33,6 +54,7 @@ export function CallResultsView({ call }: CallResultsViewProps) {
   }
 
   const isEmergency = results.is_emergency;
+  const costBreakdown = results.raw_extraction?.cost_breakdown as CostBreakdown | undefined;
 
   return (
     <div className="space-y-4">
@@ -55,7 +77,7 @@ export function CallResultsView({ call }: CallResultsViewProps) {
         </div>
       </div>
 
-      {/* Results Grid */}
+      {/* Extracted Information */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Extracted Information</CardTitle>
@@ -68,6 +90,9 @@ export function CallResultsView({ call }: CallResultsViewProps) {
           )}
         </CardContent>
       </Card>
+
+      {/* Cost Breakdown */}
+      {costBreakdown && <CostBreakdownView costData={costBreakdown} />}
 
       {/* Transcript */}
       {call.transcript && (
@@ -208,5 +233,62 @@ function EmergencyResults({ results }: { results: CallResults }) {
         ))}
       </div>
     </div>
+  );
+}
+
+interface CostBreakdownViewProps {
+  costData: CostBreakdown;
+}
+
+function CostBreakdownView({ costData }: CostBreakdownViewProps) {
+  const renderServiceCost = (serviceCost?: ServiceCost, icon?: React.ElementType) => {
+    if (!serviceCost || serviceCost.cost_usd == null) return null;
+
+    const IconComponent = icon;
+
+    return (
+      <div className="flex items-center justify-between py-2 border-b border-dashed last:border-b-0">
+        <div className="flex items-center gap-2">
+          {IconComponent && <IconComponent className="w-4 h-4 text-muted-foreground" />}
+          <div>
+            <div className="font-medium capitalize">
+              {serviceCost.service_name?.replace('_', ' ') || 'Unknown Service'}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {serviceCost.model || 'N/A'} • {formatUnits(serviceCost.units)} {serviceCost.unit_type || 'units'}
+            </div>
+          </div>
+        </div>
+        <div className="font-semibold">{formatCurrency(serviceCost.cost_usd)}</div>
+      </div>
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <DollarSign className="w-4 h-4" />
+            Cost Breakdown
+          </div>
+          <Badge variant="success" className="text-base px-3 py-1">
+            Total: {formatCurrency(costData.total_cost_usd)}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {renderServiceCost(costData.stt_cost, Mic)}
+          {renderServiceCost(costData.tts_cost, Volume2)}
+          {renderServiceCost(costData.llm_cost, Cpu)}
+          {renderServiceCost(costData.transport_cost, Activity)}
+        </div>
+        <div className="mt-4 text-sm text-muted-foreground flex justify-between items-center">
+          <span>Call Duration:</span>
+          <span className="font-medium text-primary">{formatDuration(costData.duration_seconds)}</span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

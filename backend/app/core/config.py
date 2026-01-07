@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     # OpenAI (for transcript processing)
     openai_api_key: str = Field(..., env="OPENAI_API_KEY")
     
+    # Pipecat services
+    deepgram_api_key: Optional[str] = Field(None, env="DEEPGRAM_API_KEY")
+    cartesia_api_key: Optional[str] = Field(None, env="CARTESIA_API_KEY")
+    elevenlabs_api_key: Optional[str] = Field(None, env="ELEVENLABS_API_KEY")
+    daily_api_key: Optional[str] = Field(None, env="DAILY_API_KEY")
+    anthropic_api_key: Optional[str] = Field(None, env="ANTHROPIC_API_KEY")
+    
     # Telephony
     from_phone_number: str = Field(..., env="FROM_PHONE_NUMBER")
     

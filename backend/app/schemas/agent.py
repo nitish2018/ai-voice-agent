@@ -14,6 +14,12 @@ class AgentType(str, Enum):
     CUSTOM = "custom"
 
 
+class VoiceSystem(str, Enum):
+    """Voice system backend to use."""
+    RETELL = "retell"
+    PIPECAT = "pipecat"
+
+
 class VoiceSettings(BaseModel):
     """Voice configuration settings for natural conversation."""
     voice_id: str = Field(default="11labs-Adrian", description="Retell voice ID")
@@ -80,13 +86,19 @@ class AgentBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="Agent display name")
     description: Optional[str] = Field(None, max_length=500, description="Agent description")
     agent_type: AgentType = Field(default=AgentType.CUSTOM, description="Type of agent")
+    
+    # Voice system selection
+    voice_system: VoiceSystem = Field(default=VoiceSystem.RETELL, description="Voice system backend to use")
 
     # Main prompt
     system_prompt: str = Field(..., description="Main system prompt for the agent")
     begin_message: Optional[str] = Field(None, description="Initial greeting message")
 
-    # Voice settings
+    # Voice settings (for Retell)
     voice_settings: VoiceSettings = Field(default_factory=VoiceSettings)
+    
+    # Pipecat pipeline configuration (for Pipecat)
+    pipeline_config: Optional[Dict[str, Any]] = Field(None, description="Pipecat pipeline configuration")
 
     # Multi-state configuration
     states: List[AgentState] = Field(default=[], description="Conversation states")
@@ -112,9 +124,11 @@ class AgentUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
     agent_type: Optional[AgentType] = None
+    voice_system: Optional[VoiceSystem] = None
     system_prompt: Optional[str] = None
     begin_message: Optional[str] = None
     voice_settings: Optional[VoiceSettings] = None
+    pipeline_config: Optional[Dict[str, Any]] = None
     states: Optional[List[AgentState]] = None
     starting_state: Optional[str] = None
     emergency_triggers: Optional[List[str]] = None
@@ -124,6 +138,8 @@ class AgentUpdate(BaseModel):
 class AgentResponse(AgentBase):
     """Schema for agent response with database fields."""
     id: str = Field(..., description="Unique agent ID")
+    voice_system: VoiceSystem = Field(default=VoiceSystem.RETELL)
+    pipeline_config: Optional[Dict[str, Any]] = Field(None)
     retell_agent_id: Optional[str] = Field(None, description="Retell AI agent ID")
     retell_llm_id: Optional[str] = Field(None, description="Retell LLM ID")
     created_at: datetime

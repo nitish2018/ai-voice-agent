@@ -16,6 +16,7 @@ from app.schemas.agent import (
     AgentListResponse,
     VoiceSettings,
     AgentState,
+    VoiceSystem,
 )
 from app.services.retell_service import get_retell_service
 from app.core.config import settings
@@ -50,21 +51,28 @@ class AgentService:
             # Generate ID
             agent_id = str(uuid.uuid4())
             now = datetime.utcnow().isoformat()
+            
+            # Initialize Retell IDs as None
+            llm_id = None
+            retell_agent_id = None
 
-            # Step 1: Create LLM in Retell
-            llm_id = await self.retell.create_llm(
-                system_prompt=agent_data.system_prompt,
-                begin_message=agent_data.begin_message,
-                states=agent_data.states if agent_data.states else None,
-                starting_state=agent_data.starting_state,
-            )
+            # Only create Retell resources if using Retell voice system
+            if agent_data.voice_system == VoiceSystem.RETELL:
+                # Step 1: Create LLM in Retell
+                llm_id = await self.retell.create_llm(
+                    system_prompt=agent_data.system_prompt,
+                    begin_message=agent_data.begin_message,
+                    states=agent_data.states if agent_data.states else None,
+                    starting_state=agent_data.starting_state,
+                )
 
-            # Step 2: Create Agent in Retell with LLM ID
-            retell_agent = await self.retell.create_agent(
-                voice_settings=agent_data.voice_settings,
-                agent_name=agent_data.name,
-                llm_id=llm_id,
-            )
+                # Step 2: Create Agent in Retell with LLM ID
+                retell_agent = await self.retell.create_agent(
+                    voice_settings=agent_data.voice_settings,
+                    agent_name=agent_data.name,
+                    llm_id=llm_id,
+                )
+                retell_agent_id = retell_agent.agent_id
 
             # Step 3: Prepare database record
             db_record = {
@@ -72,14 +80,16 @@ class AgentService:
                 "name": agent_data.name,
                 "description": agent_data.description,
                 "agent_type": agent_data.agent_type.value,
+                "voice_system": agent_data.voice_system.value,
                 "system_prompt": agent_data.system_prompt,
                 "begin_message": agent_data.begin_message,
                 "voice_settings": agent_data.voice_settings.model_dump(),
+                "pipeline_config": agent_data.pipeline_config if agent_data.pipeline_config else None,
                 "states": [s.model_dump() for s in agent_data.states] if agent_data.states else [],
                 "starting_state": agent_data.starting_state,
                 "emergency_triggers": agent_data.emergency_triggers,
                 "is_active": agent_data.is_active,
-                "retell_agent_id": retell_agent.agent_id,
+                "retell_agent_id": retell_agent_id,
                 "retell_llm_id": llm_id,
                 "created_at": now,
                 "updated_at": now,
@@ -191,29 +201,34 @@ class AgentService:
 
             if "agent_type" in update_dict and update_dict["agent_type"]:
                 update_dict["agent_type"] = update_dict["agent_type"].value if hasattr(update_dict["agent_type"], 'value') else update_dict["agent_type"]
+            
+            if "voice_system" in update_dict and update_dict["voice_system"]:
+                update_dict["voice_system"] = update_dict["voice_system"].value if hasattr(update_dict["voice_system"], 'value') else update_dict["voice_system"]
 
-            # Update LLM in Retell if prompt changed
-            if existing.retell_llm_id and ("system_prompt" in update_dict or "begin_message" in update_dict):
-                states = None
-                if "states" in update_dict:
-                    states = [AgentState(**s) if isinstance(s, dict) else s for s in update_dict["states"]]
+            # Only update Retell if using Retell voice system
+            if existing.voice_system == VoiceSystem.RETELL:
+                # Update LLM in Retell if prompt changed
+                if existing.retell_llm_id and ("system_prompt" in update_dict or "begin_message" in update_dict):
+                    states = None
+                    if "states" in update_dict:
+                        states = [AgentState(**s) if isinstance(s, dict) else s for s in update_dict["states"]]
 
-                await self.retell.update_llm(
-                    llm_id=existing.retell_llm_id,
-                    system_prompt=update_dict.get("system_prompt"),
-                    begin_message=update_dict.get("begin_message"),
-                    states=states,
-                    starting_state=update_dict.get("starting_state"),
-                )
+                    await self.retell.update_llm(
+                        llm_id=existing.retell_llm_id,
+                        system_prompt=update_dict.get("system_prompt"),
+                        begin_message=update_dict.get("begin_message"),
+                        states=states,
+                        starting_state=update_dict.get("starting_state"),
+                    )
 
-            # Update Agent in Retell if voice settings changed
-            if existing.retell_agent_id and "voice_settings" in update_dict:
-                voice_settings = VoiceSettings(**update_dict["voice_settings"])
-                await self.retell.update_agent(
-                    existing.retell_agent_id,
-                    voice_settings=voice_settings,
-                    agent_name=update_dict.get("name", existing.name)
-                )
+                # Update Agent in Retell if voice settings changed
+                if existing.retell_agent_id and "voice_settings" in update_dict:
+                    voice_settings = VoiceSettings(**update_dict["voice_settings"])
+                    await self.retell.update_agent(
+                        existing.retell_agent_id,
+                        voice_settings=voice_settings,
+                        agent_name=update_dict.get("name", existing.name)
+                    )
 
             # Update database
             result = self.db.table(Tables.AGENTS).update(update_dict).eq("id", agent_id).execute()
@@ -271,14 +286,24 @@ class AgentService:
 
     def _map_to_response(self, row: dict) -> AgentResponse:
         """Map database row to response schema."""
+        # Parse voice_system, defaulting to RETELL if not specified
+        voice_system_str = row.get("voice_system", "retell")
+        try:
+            voice_system = VoiceSystem(voice_system_str)
+        except ValueError:
+            logger.warning(f"Invalid voice_system '{voice_system_str}', defaulting to RETELL")
+            voice_system = VoiceSystem.RETELL
+        
         return AgentResponse(
             id=row["id"],
             name=row["name"],
             description=row.get("description"),
             agent_type=row["agent_type"],
+            voice_system=voice_system,
             system_prompt=row["system_prompt"],
             begin_message=row.get("begin_message"),
             voice_settings=VoiceSettings(**row.get("voice_settings", {})),
+            pipeline_config=row.get("pipeline_config"),
             states=row.get("states", []),
             starting_state=row.get("starting_state"),
             emergency_triggers=row.get("emergency_triggers", []),

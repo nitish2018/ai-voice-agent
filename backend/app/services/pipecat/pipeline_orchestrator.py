@@ -10,7 +10,7 @@ from typing import Optional
 
 from .session_manager import PipecatSessionState
 from .transcript_capture import create_transcript_processor
-from .database_updater import get_database_updater
+from .call_completion_service import get_call_completion_service
 from .pipeline_factory import get_pipeline_factory
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ class PipelineOrchestrator:
             return
         
         self.factory = get_pipeline_factory()
-        self.db_updater = get_database_updater()
+        self.call_completion_service = get_call_completion_service()
         logger.info("PipelineOrchestrator initialized")
     
     async def run_daily_pipeline(self, session: PipecatSessionState) -> None:
@@ -415,7 +415,7 @@ class PipelineOrchestrator:
         # Update database
         if not session.metrics_saved:
             logger.info(f"[PIPELINE CLEANUP] Updating database for session {session.session_id}")
-            await self.db_updater.update_call_completion(session.session_id, session)
+            await self.call_completion_service.complete_call(session.session_id, session)
             session.metrics_saved = True
             logger.info(f"[PIPELINE CLEANUP] Database update completed")
     

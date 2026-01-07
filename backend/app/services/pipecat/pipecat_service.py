@@ -28,7 +28,7 @@ from .session_manager import get_session_manager
 from .daily_room_service import get_daily_room_service
 from .text_processor import get_text_processor
 from .pipeline_orchestrator import get_pipeline_orchestrator
-from .database_updater import get_database_updater
+from .call_completion_service import get_call_completion_service
 from app.services.cost_calculator import get_cost_calculator
 
 logger = logging.getLogger(__name__)
@@ -70,7 +70,7 @@ class PipecatService:
         self.daily_room_service = get_daily_room_service()
         self.text_processor = get_text_processor()
         self.pipeline_orchestrator = get_pipeline_orchestrator()
-        self.db_updater = get_database_updater()
+        self.call_completion_service = get_call_completion_service()
         self.cost_calculator = get_cost_calculator()
         
         logger.info("PipecatService initialized with modular architecture")
@@ -243,7 +243,7 @@ class PipecatService:
             
             # Update database if not already done
             if not session.metrics_saved:
-                await self.db_updater.update_call_completion(session_id, session)
+                await self.call_completion_service.complete_call(session_id, session)
                 session.metrics_saved = True
             
         # Mark as completed

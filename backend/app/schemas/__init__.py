@@ -39,6 +39,11 @@ from .webhook import (
     WebhookResponse
 )
 
+from .cost import (
+    ServiceCost,
+    CostBreakdown
+)
+
 __all__ = [
     # Agent schemas
     "AgentType",
@@ -75,5 +80,9 @@ __all__ = [
     "TranscriptEntry",
     "CallData",
     "RetellWebhookPayload",
-    "WebhookResponse"
+    "WebhookResponse",
+    
+    # Cost schemas
+    "ServiceCost",
+    "CostBreakdown"
 ]

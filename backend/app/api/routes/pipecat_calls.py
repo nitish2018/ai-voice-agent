@@ -21,7 +21,7 @@ router = APIRouter(prefix="/pipecat", tags=["pipecat"])
 
 # Check if Pipecat is available
 try:
-    from app.services.pipecat_service import get_pipecat_service
+    from app.services.pipecat import get_pipecat_service
     PIPECAT_AVAILABLE = True
 except ImportError:
     PIPECAT_AVAILABLE = False

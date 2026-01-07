@@ -14,29 +14,10 @@ Pricing is based on publicly available pricing from service websites as of Jan 2
 """
 import logging
 from typing import Optional
-from pydantic import BaseModel
+
+from app.schemas.cost import ServiceCost, CostBreakdown
 
 logger = logging.getLogger(__name__)
-
-
-class ServiceCost(BaseModel):
-    """Cost breakdown for a single service."""
-    service_name: str
-    model: Optional[str] = None
-    units: float  # Number of units used (minutes, characters, tokens, etc.)
-    unit_type: str  # "minutes", "characters", "tokens", etc.
-    cost_per_unit: float  # Cost per unit in USD
-    cost_usd: float  # Total cost in USD
-
-
-class CostBreakdown(BaseModel):
-    """Complete cost breakdown for a call."""
-    stt_cost: Optional[ServiceCost] = None
-    tts_cost: Optional[ServiceCost] = None
-    llm_cost: Optional[ServiceCost] = None
-    transport_cost: Optional[ServiceCost] = None
-    total_cost_usd: float
-    duration_seconds: float
 
 
 class CostCalculator:

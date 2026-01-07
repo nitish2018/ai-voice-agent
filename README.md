@@ -303,7 +303,7 @@ ai-voice-agent/
 ├── backend/                  # FastAPI
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── routes/      # API endpoints (agents.py, calls.py)
+│   │   │   ├── routes/      # API endpoints (agents.py, calls.py, pipecat_calls.py)
 │   │   │   └── webhooks/    # Retell AI webhooks (retell.py)
 │   │   ├── core/            # Config & security
 │   │   ├── db/              # Database setup
@@ -311,9 +311,22 @@ ai-voice-agent/
 │   │   │   ├── agent_service.py
 │   │   │   ├── call_service.py
 │   │   │   ├── retell_service.py
-│   │   │   └── transcript_processor.py
+│   │   │   ├── transcript_processor.py
+│   │   │   ├── cost_calculator.py
+│   │   │   └── pipecat/     # Modular Pipecat services
+│   │   │       ├── pipecat_service.py
+│   │   │       ├── pipeline_factory.py
+│   │   │       ├── pipeline_orchestrator.py
+│   │   │       ├── daily_room_service.py
+│   │   │       ├── session_manager.py
+│   │   │       ├── transcript_capture.py
+│   │   │       ├── text_processor.py
+│   │   │       ├── database_updater.py
+│   │   │       ├── stt/      # Speech-to-Text services
+│   │   │       ├── tts/      # Text-to-Speech services
+│   │   │       └── llm/      # LLM services
 │   │   ├── templates/       # Prompt templates (agent_templates.py)
-│   │   └── schemas/         # Pydantic schemas (agent.py, call.py)
+│   │   └── schemas/         # Pydantic schemas (agent.py, call.py, pipeline.py, etc.)
 │   └── tests/
 │
 └── supabase/                 # Database migrations & config
@@ -394,6 +407,234 @@ npm run dev
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/webhooks/retell` | Retell AI webhook endpoint |
+
+---
+
+## 🎤 Pipecat Voice Framework
+
+The application now supports **two voice system backends**:
+
+1. **Retell AI**: Managed voice infrastructure with built-in LLM (original)
+2. **Pipecat**: Open-source framework with flexible multi-service support (new)
+
+### Why Pipecat?
+
+- **Multi-Service Flexibility**: Choose your preferred STT, TTS, and LLM providers
+- **Cost Optimization**: Mix and match services based on performance and budget
+- **Vendor Independence**: Not locked into a single provider
+- **Real-time Processing**: Low-latency voice pipeline
+
+### Pipecat Architecture
+
+#### Pipeline Flow
+
+```
+User Audio Input
+    ↓
+[Transport] ← Daily.co WebRTC
+    ↓
+[STT Service] ← Deepgram, Azure Speech, AssemblyAI
+    ↓
+[Transcript Capture] ← User message capture
+    ↓
+[LLM Context] ← OpenAI or Anthropic
+    ↓
+[Transcript Capture] ← Bot message capture
+    ↓
+[TTS Service] ← Cartesia, ElevenLabs, Azure TTS
+    ↓
+[Transport] → Audio Output
+```
+
+#### Modular Service Structure
+
+Following **SOLID principles** and **Single Responsibility Principle**, the Pipecat service is organized into specialized modules:
+
+```
+backend/app/services/pipecat/
+├── __init__.py                    # Module exports
+├── pipecat_service.py             # Main orchestrator (~330 lines)
+├── pipeline_factory.py            # Service factory
+├── pipeline_orchestrator.py       # Pipeline execution
+├── daily_room_service.py          # Daily.co room management
+├── session_manager.py             # Session lifecycle
+├── transcript_capture.py          # Transcript processing
+├── text_processor.py              # Text utilities
+├── database_updater.py            # Database operations
+├── stt/                          # Speech-to-Text
+│   ├── base.py                   # STT protocol & utilities
+│   ├── stt_factory.py            # STT service factory
+│   └── deepgram_service.py       # Deepgram implementation
+├── tts/                          # Text-to-Speech
+│   ├── base.py                   # TTS protocol & utilities
+│   ├── tts_factory.py            # TTS service factory
+│   ├── elevenlabs_service.py     # ElevenLabs implementation
+│   └── cartesia_service.py       # Cartesia implementation
+└── llm/                          # Large Language Models
+    ├── base.py                   # LLM protocol & utilities
+    ├── llm_factory.py            # LLM service factory
+    ├── openai_service.py         # OpenAI implementation
+    └── anthropic_service.py      # Anthropic implementation
+```
+
+### Key Components
+
+#### 1. **PipecatService** - Main Orchestrator
+- Coordinates all specialized services
+- Provides high-level API for call management
+- Handles transport routing (Daily.co vs WebSocket)
+
+#### 2. **PipelineFactory** - Service Creation
+- Factory pattern for STT, TTS, LLM services
+- Delegates to specialized factories (STT, TTS, LLM)
+- Handles API key validation
+
+#### 3. **PipelineOrchestrator** - Pipeline Execution
+- Assembles complete pipeline with transcript capture
+- Creates LLM context with system prompt
+- Runs pipeline with error handling
+- Updates database on completion
+
+#### 4. **SessionManager** - Session Lifecycle
+- Creates and stores new sessions
+- Tracks active and completed sessions
+- Manages in-memory session storage
+
+#### 5. **DailyRoomService** - Room Management
+- Creates Daily.co rooms with appropriate configuration
+- Generates meeting tokens for bot authentication
+
+#### 6. **TranscriptCaptureProcessor** - Transcript Capture
+- Intercepts `TranscriptionFrame` (user speech from STT)
+- Intercepts `TextFrame` (bot responses from LLM)
+- Stores messages with timestamps
+
+#### 7. **DatabaseUpdater** - Database Operations
+- Updates call status and metrics
+- Stores transcripts in formatted text
+- Calculates cost breakdowns
+
+#### 8. **TextProcessor** - Text Utilities
+- Replaces placeholders like `{{driver_name}}` with actual values
+
+### Supported Services
+
+#### STT (Speech-to-Text) Providers
+
+| Service | Models | Cost (per min) | Quality |
+|---------|--------|----------------|---------|
+| **Deepgram** | nova-2, base | $0.0043 | ⭐⭐⭐⭐⭐ |
+| Azure Speech | default | $0.0167 | ⭐⭐⭐⭐ |
+| AssemblyAI | default | $0.015 | ⭐⭐⭐⭐ |
+
+#### TTS (Text-to-Speech) Providers
+
+| Service | Cost (per char) | Quality |
+|---------|-----------------|---------|
+| **Cartesia** | $0.000015 | ⭐⭐⭐⭐ |
+| **ElevenLabs** | $0.0003 | ⭐⭐⭐⭐⭐ |
+| Azure TTS | $0.000016 | ⭐⭐⭐⭐ |
+
+#### LLM Providers
+
+| Service | Models | Cost (per 1K tokens) | Speed |
+|---------|--------|---------------------|-------|
+| **OpenAI** | gpt-4o, gpt-4o-mini | $0.0025 in / $0.01 out | Fast |
+| **Anthropic** | claude-3-5-sonnet | $0.003 in / $0.015 out | Fast |
+
+### Pipecat Configuration
+
+#### Environment Variables
+
+Add these to `backend/.env`:
+
+```bash
+# Pipecat Services (add as needed)
+DEEPGRAM_API_KEY=your_deepgram_key
+CARTESIA_API_KEY=your_cartesia_key
+ELEVENLABS_API_KEY=your_elevenlabs_key
+DAILY_API_KEY=your_daily_key
+ANTHROPIC_API_KEY=your_anthropic_key
+```
+
+#### Example Pipeline Config
+
+```json
+{
+  "stt_config": {
+    "service": "deepgram",
+    "model": "nova-2"
+  },
+  "tts_config": {
+    "service": "cartesia",
+    "model": "sonic-english",
+    "voice_id": "79a125e8-cd45-4c13-8a67-188112f4dd22"
+  },
+  "llm_config": {
+    "service": "openai",
+    "model": "gpt-4o"
+  },
+  "transport": "daily_webrtc",
+  "enable_interruptions": true,
+  "vad_enabled": true
+}
+```
+
+### Cost Tracking
+
+The system automatically calculates operational costs:
+
+**Example: 1-minute call with Deepgram + Cartesia + GPT-4o + Daily.co**
+- STT: ~$0.0043 (1 min)
+- TTS: ~$0.0045 (300 chars)
+- LLM: ~$0.012 (400 tokens)
+- Transport: ~$0.0015 (1 min)
+- **Total: ~$0.022 per minute**
+
+**Cost Optimization Tips:**
+1. Use GPT-4o-mini instead of GPT-4o (4x cheaper)
+2. Use Cartesia instead of ElevenLabs (20x cheaper TTS)
+3. Keep calls focused to minimize duration
+
+### Design Principles
+
+The Pipecat refactoring follows **SOLID principles**:
+
+#### Single Responsibility Principle (SRP)
+Each module has exactly one reason to change:
+- **DailyRoomService**: Changes only if Daily.co API changes
+- **SessionManager**: Changes only if session lifecycle logic changes
+- **DatabaseUpdater**: Changes only if database schema/operations change
+- **PipelineOrchestrator**: Changes only if pipeline assembly changes
+
+#### Benefits of Modular Architecture
+
+**Before (Monolithic):**
+- ❌ 699 lines in single file
+- ❌ Multiple responsibilities mixed
+- ❌ Hard to test individual components
+
+**After (Modular):**
+- ✅ ~200 lines per module (manageable size)
+- ✅ Single responsibility per module
+- ✅ Easy to test each component in isolation
+- ✅ Clear separation of concerns
+- ✅ Loose coupling via dependency injection
+
+### Retell vs Pipecat Comparison
+
+| Feature | Retell | Pipecat |
+|---------|--------|---------|
+| Setup Complexity | Low | Medium |
+| Service Flexibility | None | High |
+| Cost Control | Fixed | Variable |
+| Latency | Low | Low |
+| Quality | High | High |
+| WebRTC Support | ✅ | ✅ |
+| Phone Calls | ✅ | ❌ |
+| Multi-STT | ❌ | ✅ |
+| Multi-TTS | ❌ | ✅ |
+| Multi-LLM | ❌ | ✅ |
 
 ---
 

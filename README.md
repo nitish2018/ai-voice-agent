@@ -431,7 +431,7 @@ The application now supports **two voice system backends**:
 ```
 User Audio Input
     ↓
-[Transport] ← Daily.co WebRTC
+[Transport] ← Daily.co WebRTC or WebSocket
     ↓
 [STT Service] ← Deepgram, Azure Speech, AssemblyAI
     ↓
@@ -445,6 +445,20 @@ User Audio Input
     ↓
 [Transport] → Audio Output
 ```
+
+#### Transport Options
+
+1. **Daily.co WebRTC** (Recommended)
+   - Low latency, high quality
+   - Built-in NAT traversal
+   - Requires Daily.co API key
+   - Better for production
+
+2. **WebSocket**
+   - Direct connection, simple setup
+   - No additional service dependencies
+   - Client handles audio encoding
+   - Better for development/testing
 
 #### Modular Service Structure
 
@@ -553,12 +567,15 @@ Add these to `backend/.env`:
 DEEPGRAM_API_KEY=your_deepgram_key
 CARTESIA_API_KEY=your_cartesia_key
 ELEVENLABS_API_KEY=your_elevenlabs_key
-DAILY_API_KEY=your_daily_key
+DAILY_API_KEY=your_daily_key  # Required for Daily.co WebRTC transport
 ANTHROPIC_API_KEY=your_anthropic_key
 ```
 
+**Note:** `DAILY_API_KEY` is only required if using Daily.co WebRTC transport. WebSocket transport doesn't require any additional API keys.
+
 #### Example Pipeline Config
 
+**Daily.co WebRTC Transport:**
 ```json
 {
   "stt_config": {
@@ -579,6 +596,46 @@ ANTHROPIC_API_KEY=your_anthropic_key
   "vad_enabled": true
 }
 ```
+
+**WebSocket Transport:**
+```json
+{
+  "stt_config": {
+    "service": "deepgram",
+    "model": "nova-2"
+  },
+  "tts_config": {
+    "service": "cartesia",
+    "model": "sonic-english",
+    "voice_id": "79a125e8-cd45-4c13-8a67-188112f4dd22"
+  },
+  "llm_config": {
+    "service": "openai",
+    "model": "gpt-4o"
+  },
+  "transport": "websocket",
+  "enable_interruptions": true,
+  "vad_enabled": true
+}
+```
+
+#### WebSocket Usage
+
+To use WebSocket transport:
+
+1. **Start a call** with `transport: "websocket"` in the pipeline config
+2. **Get the WebSocket URL** from the response: `/api/pipecat/websocket/{session_id}`
+3. **Connect** using a WebSocket client: `ws://localhost:8000/api/pipecat/websocket/{session_id}`
+4. **Send** raw audio data (16kHz, 16-bit PCM, mono)
+5. **Receive** processed audio back from the bot
+
+**Audio Format Requirements:**
+- Sample Rate: 16kHz
+- Bit Depth: 16-bit
+- Channels: Mono
+- Encoding: PCM (Linear)
+
+**See full documentation:** `backend/app/services/pipecat/WEBSOCKET_GUIDE.md`
 
 ### Cost Tracking
 
@@ -623,18 +680,21 @@ Each module has exactly one reason to change:
 
 ### Retell vs Pipecat Comparison
 
-| Feature | Retell | Pipecat |
-|---------|--------|---------|
-| Setup Complexity | Low | Medium |
-| Service Flexibility | None | High |
-| Cost Control | Fixed | Variable |
-| Latency | Low | Low |
-| Quality | High | High |
-| WebRTC Support | ✅ | ✅ |
-| Phone Calls | ✅ | ❌ |
-| Multi-STT | ❌ | ✅ |
-| Multi-TTS | ❌ | ✅ |
-| Multi-LLM | ❌ | ✅ |
+| Feature | Retell | Pipecat (WebRTC) | Pipecat (WebSocket) |
+|---------|--------|------------------|---------------------|
+| Setup Complexity | Low | Medium | Low |
+| Service Flexibility | None | High | High |
+| Cost Control | Fixed | Variable | Variable |
+| Latency | Low | Low | Medium |
+| Quality | High | High | Good |
+| WebRTC Support | ✅ | ✅ | ❌ |
+| WebSocket Support | ❌ | ❌ | ✅ |
+| Phone Calls | ✅ | ❌ | ❌ |
+| Multi-STT | ❌ | ✅ | ✅ |
+| Multi-TTS | ❌ | ✅ | ✅ |
+| Multi-LLM | ❌ | ✅ | ✅ |
+| NAT Traversal | ✅ | ✅ | ❌ |
+| External Dependencies | Retell API | Daily.co API | None |
 
 ---
 

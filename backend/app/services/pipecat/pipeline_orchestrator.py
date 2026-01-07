@@ -22,6 +22,7 @@ try:
     from pipecat.pipeline.task import PipelineParams, PipelineTask
     from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
     from pipecat.transports.services.daily import DailyParams, DailyTransport
+    from pipecat.transports.base_transport import BaseTransport, TransportParams
     
     PIPECAT_AVAILABLE = True
 except ImportError as e:
@@ -35,7 +36,7 @@ class PipelineOrchestrator:
     
     Responsibilities:
     - Create and configure pipeline components (STT, TTS, LLM)
-    - Set up Daily.co transport
+    - Set up transport (Daily.co WebRTC or WebSocket)
     - Build complete pipeline with transcript capture
     - Run pipeline with proper error handling
     - Handle cleanup and finalization
@@ -88,6 +89,48 @@ class PipelineOrchestrator:
             
         except Exception as e:
             logger.error(f"[PIPELINE] Pipeline error for session {session.session_id}: {e}", exc_info=True)
+            raise
+        
+        finally:
+            # Always perform cleanup and database update
+            await self._finalize_session(session)
+    
+    async def run_websocket_pipeline(self, session: PipecatSessionState, websocket) -> None:
+        """
+        Run a complete WebSocket pipeline for a session.
+        
+        This method:
+        1. Creates all pipeline components (STT, TTS, LLM, WebSocket transport)
+        2. Assembles the pipeline with transcript capture
+        3. Runs the pipeline
+        4. Handles errors and cleanup
+        5. Updates database on completion
+        
+        Args:
+            session: Session state with configuration and context
+            websocket: WebSocket connection object
+        """
+        if not PIPECAT_AVAILABLE:
+            raise Exception("Pipecat not available")
+        
+        logger.info(f"[PIPELINE] Starting WebSocket pipeline for session: {session.session_id}")
+        
+        try:
+            # Create pipeline components
+            pipeline = await self._create_websocket_pipeline(session, websocket)
+            session.pipeline = pipeline
+            
+            # Create and configure task
+            task = self._create_pipeline_task(pipeline, session)
+            session.task = task
+            
+            # Run pipeline
+            await self._run_pipeline_task(task, session)
+            
+            logger.info(f"[PIPELINE] WebSocket pipeline completed for session: {session.session_id}")
+            
+        except Exception as e:
+            logger.error(f"[PIPELINE] WebSocket pipeline error for session {session.session_id}: {e}", exc_info=True)
             raise
         
         finally:
@@ -147,6 +190,60 @@ class PipelineOrchestrator:
         logger.info("[PIPELINE] Pipeline created successfully")
         return pipeline
     
+    async def _create_websocket_pipeline(self, session: PipecatSessionState, websocket) -> Pipeline:
+        """
+        Create and assemble the complete WebSocket pipeline.
+        
+        Args:
+            session: Session state with configuration
+            websocket: WebSocket connection object
+            
+        Returns:
+            Configured Pipeline instance
+        """
+        logger.info("[PIPELINE] Creating WebSocket pipeline components...")
+        
+        # Create services using factory
+        logger.info("[PIPELINE] Creating STT service...")
+        stt = self.factory.create_stt_service(session.config)
+        
+        logger.info("[PIPELINE] Creating TTS service...")
+        tts = self.factory.create_tts_service(session.config)
+        
+        logger.info("[PIPELINE] Creating LLM service...")
+        llm = self.factory.create_llm_service(session.config)
+        
+        # Create WebSocket transport
+        logger.info("[PIPELINE] Creating WebSocket transport...")
+        transport = await self._create_websocket_transport(session, websocket)
+        session.transport = transport
+        
+        # Create LLM context with system prompt
+        context = self._create_llm_context(session)
+        context_aggregator = llm.create_context_aggregator(context)
+        session.llm_context = context
+        
+        # Create transcript capture processors
+        user_transcript_capture = create_transcript_processor(session)
+        bot_transcript_capture = create_transcript_processor(session)
+        
+        # Assemble pipeline
+        logger.info("[PIPELINE] Assembling WebSocket pipeline...")
+        pipeline = Pipeline([
+            transport.input(),              # Audio input from user via WebSocket
+            stt,                            # Speech-to-text
+            user_transcript_capture,        # Capture user transcription
+            context_aggregator.user(),      # Add user message to context
+            llm,                            # Generate response
+            bot_transcript_capture,         # Capture bot response
+            tts,                            # Text-to-speech
+            transport.output(),             # Audio output to user via WebSocket
+            context_aggregator.assistant(), # Add assistant message to context
+        ])
+        
+        logger.info("[PIPELINE] WebSocket pipeline created successfully")
+        return pipeline
+    
     def _create_daily_transport(self, session: PipecatSessionState) -> DailyTransport:
         """
         Create Daily.co transport for WebRTC communication.
@@ -171,6 +268,31 @@ class PipelineOrchestrator:
         )
         
         logger.info("[PIPELINE] Daily transport created successfully")
+        return transport
+    
+    async def _create_websocket_transport(self, session: PipecatSessionState, websocket) -> BaseTransport:
+        """
+        Create WebSocket transport for bidirectional audio communication.
+        
+        Args:
+            session: Session state
+            websocket: FastAPI WebSocket connection
+            
+        Returns:
+            Configured BaseTransport instance for WebSocket
+        """
+        from .websocket_transport import PipecatWebSocketTransport
+        
+        transport = PipecatWebSocketTransport(
+            websocket=websocket,
+            params=TransportParams(
+                audio_in_enabled=True,
+                audio_out_enabled=True,
+                vad_enabled=session.config.vad_enabled if hasattr(session.config, 'vad_enabled') else True,
+            )
+        )
+        
+        logger.info("[PIPELINE] WebSocket transport created successfully")
         return transport
     
     def _create_llm_context(self, session: PipecatSessionState) -> OpenAILLMContext:

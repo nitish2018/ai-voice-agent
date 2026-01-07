@@ -92,12 +92,13 @@ async def end_session(session_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.websocket("/ws/{session_id}")
-async def websocket_endpoint(websocket: WebSocket, session_id: str):
+@router.websocket("/websocket/{session_id}")
+async def websocket_audio_stream(websocket: WebSocket, session_id: str):
     """
     WebSocket endpoint for Pipecat audio streaming.
     
-    This endpoint is used for WebSocket-based transport (as opposed to WebRTC/Daily.co).
+    This endpoint handles bidirectional audio streaming for Pipecat sessions using WebSocket transport.
+    The client should send raw audio data (16kHz, 16-bit PCM, mono) and will receive the same format back.
     
     Args:
         websocket: WebSocket connection
@@ -107,34 +108,33 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         await websocket.close(code=1003, reason="Pipecat service not available")
         return
     
-    await websocket.accept()
-    logger.info(f"WebSocket connection accepted for session: {session_id}")
+    logger.info(f"[WEBSOCKET] Connection request for session: {session_id}")
     
     try:
-        # Get Pipecat service
+        # Get Pipecat service and session
         pipecat_service = get_pipecat_service()
+        session_manager = pipecat_service.session_manager
+        pipeline_orchestrator = pipecat_service.pipeline_orchestrator
         
-        # TODO: Implement WebSocket audio streaming
-        # This would involve:
-        # 1. Getting the session from pipecat_service
-        # 2. Setting up bidirectional audio streaming
-        # 3. Handling binary audio data
+        # Get session
+        session = session_manager.get_session(session_id)
+        if not session:
+            logger.error(f"[WEBSOCKET] Session {session_id} not found")
+            await websocket.close(code=1008, reason="Session not found")
+            return
         
-        # For now, send a message that WebSocket transport is not yet implemented
-        await websocket.send_json({
-            "error": "WebSocket transport not yet implemented. Please use Daily.co WebRTC transport."
-        })
+        logger.info(f"[WEBSOCKET] Starting pipeline for session: {session_id}")
         
-        # Keep connection open and wait for messages
-        while True:
-            data = await websocket.receive()
-            logger.debug(f"Received WebSocket data: {data}")
-            
+        # Run WebSocket pipeline
+        await pipeline_orchestrator.run_websocket_pipeline(session, websocket)
+        
+        logger.info(f"[WEBSOCKET] Pipeline completed for session: {session_id}")
+        
     except WebSocketDisconnect:
-        logger.info(f"WebSocket disconnected for session: {session_id}")
+        logger.info(f"[WEBSOCKET] Client disconnected for session: {session_id}")
     except Exception as e:
-        logger.error(f"WebSocket error for session {session_id}: {e}", exc_info=True)
+        logger.error(f"[WEBSOCKET] Error for session {session_id}: {e}", exc_info=True)
         try:
             await websocket.close(code=1011, reason=str(e))
-        except:
-            pass
+        except Exception as close_error:
+            logger.error(f"[WEBSOCKET] Error closing WebSocket: {close_error}")

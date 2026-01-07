@@ -184,12 +184,20 @@ class PipecatService:
             
         Returns:
             PipecatCallResponse with WebSocket details
-            
-        Raises:
-            NotImplementedError: WebSocket transport not yet implemented
         """
-        logger.warning("[SERVICE] WebSocket transport requested but not implemented")
-        raise NotImplementedError("WebSocket transport not yet implemented")
+        logger.info(f"[SERVICE] Setting up WebSocket transport for session {session.session_id}")
+        
+        # Generate WebSocket URL
+        # The client will connect to: ws://localhost:8000/api/pipecat/websocket/{session_id}
+        session.websocket_url = f"/api/pipecat/websocket/{session.session_id}"
+        
+        logger.info(f"[SERVICE] Session {session.session_id} initialized for WebSocket")
+        
+        return PipecatCallResponse(
+            session_id=session.session_id,
+            websocket_url=session.websocket_url,
+            status="initialized"
+        )
     
     async def end_call(self, session_id: str) -> Dict[str, Any]:
         """

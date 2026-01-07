@@ -1,6 +1,6 @@
 # AI Voice Agent Administration Platform
 
-A comprehensive web application for configuring, testing, and reviewing calls made by an adaptive AI voice agent using Retell AI. Built with React, TypeScript, FastAPI, and Supabase.
+A comprehensive web application for configuring, testing, and reviewing calls made by an adaptive AI voice agent using Retell AI or PipeCat pipeline. Built with React, TypeScript, FastAPI, and Supabase.
 
 ## NOTE
 - Please go through provided Loom videos for more comprehensive understanding of the application

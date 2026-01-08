@@ -189,13 +189,27 @@ class PipecatService:
         
         # Generate WebSocket URL
         # The client will connect to: ws://localhost:8000/api/pipecat/websocket/{session_id}
-        session.websocket_url = f"/api/pipecat/websocket/{session.session_id}"
+        # session.websocket_url = f"/api/pipecat/websocket/{session.session_id}"
         
-        logger.info(f"[SERVICE] Session {session.session_id} initialized for WebSocket")
+        # logger.info(f"[SERVICE] Session {session.session_id} initialized for WebSocket")
         
+        # return PipecatCallResponse(
+        #     session_id=session.session_id,
+        #     websocket_url=session.websocket_url,
+        #     status="initialized"
+        # )
+        logger.info(
+            f"[SERVICE] Starting Pipecat-managed WebSocket for session {session.session_id}"
+        )
+
+        asyncio.create_task(
+            self.pipeline_orchestrator.run_pipecat_managed_ws_pipeline(session)
+        )
+
+        # Pipecat manages host/port internally
         return PipecatCallResponse(
             session_id=session.session_id,
-            websocket_url=session.websocket_url,
+            websocket_url="pipecat-managed",
             status="initialized"
         )
     

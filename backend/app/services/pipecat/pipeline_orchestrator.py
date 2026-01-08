@@ -23,7 +23,14 @@ try:
     from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
     from pipecat.transports.services.daily import DailyParams, DailyTransport
     from pipecat.transports.base_transport import BaseTransport, TransportParams
-    
+    from pipecat.transports.websocket.server import WebsocketServerParams, WebsocketServerTransport
+    from pipecat.serializers.protobuf import ProtobufFrameSerializer
+    from pipecat.audio.vad.silero import SileroVADAnalyzer
+
+
+
+
+
     PIPECAT_AVAILABLE = True
 except ImportError as e:
     logger.error(f"Pipecat not available: {e}")
@@ -52,6 +59,35 @@ class PipelineOrchestrator:
         self.factory = get_pipeline_factory()
         self.call_completion_service = get_call_completion_service()
         logger.info("PipelineOrchestrator initialized")
+    
+    async def run_pipecat_managed_ws_pipeline(self,session: PipecatSessionState) -> None:
+        logger.info(
+            f"[PIPELINE] Starting Pipecat-managed WS pipeline for session {session.session_id}"
+        )
+
+        try:
+            pipeline = await self._create_pipecat_ws_pipeline(session)
+            session.pipeline = pipeline
+
+            task = self._create_pipeline_task(pipeline, session)
+            session.task = task
+
+            runner = PipelineRunner()
+            session.runner = runner
+
+            await runner.run(task)
+
+        except Exception as e:
+            logger.error(
+                f"[PIPELINE] Pipecat WS pipeline error: {e}",
+                exc_info=True
+            )
+            raise
+
+        finally:
+            await self._finalize_session(session)
+
+
     
     async def run_daily_pipeline(self, session: PipecatSessionState) -> None:
         """
@@ -243,6 +279,51 @@ class PipelineOrchestrator:
         
         logger.info("[PIPELINE] WebSocket pipeline created successfully")
         return pipeline
+
+    async def _create_pipecat_ws_pipeline(
+        self,
+        session: PipecatSessionState
+    ) -> Pipeline:
+
+        logger.info("[PIPELINE] Creating Pipecat-managed WebSocket transport")
+
+        ws_transport = WebsocketServerTransport(
+            params=WebsocketServerParams(
+                serializer=ProtobufFrameSerializer(),
+                audio_in_enabled=True,
+                audio_out_enabled=True,
+                add_wav_header=False,
+                vad_analyzer=SileroVADAnalyzer(),
+                session_timeout=60 * 3,
+            )
+        )
+
+        stt = self.factory.create_stt_service(session.config)
+        tts = self.factory.create_tts_service(session.config)
+        llm = self.factory.create_llm_service(session.config)
+
+        context = self._create_llm_context(session)
+        context_aggregator = llm.create_context_aggregator(context)
+        session.llm_context = context
+
+        user_transcript_capture = create_transcript_processor(session)
+        bot_transcript_capture = create_transcript_processor(session)
+
+        pipeline = Pipeline([
+            ws_transport.input(),
+            stt,
+            user_transcript_capture,
+            context_aggregator.user(),
+            llm,
+            bot_transcript_capture,
+            tts,
+            ws_transport.output(),
+            context_aggregator.assistant(),
+        ])
+
+        logger.info("[PIPELINE] Pipecat-managed WS pipeline created")
+        return pipeline
+    
     
     def _create_daily_transport(self, session: PipecatSessionState) -> DailyTransport:
         """

@@ -227,9 +227,11 @@ class CallCompletionService:
             )
             
             # Convert to CallResultsData
+            # Exclude call_id from extracted_results since we're passing it explicitly
+            extracted_dict = extracted_results.model_dump(exclude={'call_id'})
             results_data = CallResultsData(
                 call_id=call_id,
-                **extracted_results.model_dump()
+                **extracted_dict
             )
             
             logger.info(f"[CALL_COMPLETION] Successfully extracted structured data")

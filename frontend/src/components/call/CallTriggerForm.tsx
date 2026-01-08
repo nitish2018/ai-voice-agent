@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Phone, Loader2, Truck, User, MapPin } from 'lucide-react';
+import { Phone, Loader2, Truck, User, MapPin, Radio } from 'lucide-react';
 import { Button, Input, Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui';
 import { callApi } from '@/lib/api';
-import type { CallTriggerRequest, Call, Agent } from '@/types';
+import type { CallTriggerRequest, Call, Agent, TransportType } from '@/types';
 
 interface CallTriggerFormProps {
   agents: Agent[];
@@ -13,13 +13,14 @@ export function CallTriggerForm({ agents, onCallTriggered }: CallTriggerFormProp
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<CallTriggerRequest>({
+  const [formData, setFormData] = useState<CallTriggerRequest & { transport?: TransportType }>({
     agent_id: agents[0]?.id || '',
     driver_name: '',
     load_number: '',
     origin: '',
     destination: '',
     expected_eta: '',
+    transport: 'daily_webrtc',
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -51,7 +52,7 @@ export function CallTriggerForm({ agents, onCallTriggered }: CallTriggerFormProp
       const call = await callApi.trigger(formData);
       onCallTriggered(call);
 
-      // Reset form except agent selection
+      // Reset form except agent selection and transport
       setFormData(prev => ({
         ...prev,
         driver_name: '',
@@ -100,6 +101,29 @@ export function CallTriggerForm({ agents, onCallTriggered }: CallTriggerFormProp
               )}
             </select>
           </div>
+
+          {/* Transport Selection - Only show for Pipecat agents */}
+          {agents.find(a => a.id === formData.agent_id)?.voice_system === 'pipecat' && (
+            <div>
+              <label htmlFor="transport" className="form-label flex items-center gap-1">
+                <Radio className="w-4 h-4" />
+                Transport
+              </label>
+              <select
+                id="transport"
+                name="transport"
+                value={formData.transport}
+                onChange={handleInputChange}
+                className="form-input"
+              >
+                <option value="daily_webrtc">Daily.co WebRTC (Recommended)</option>
+                <option value="websocket">WebSocket</option>
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                WebRTC provides better audio quality and lower latency
+              </p>
+            </div>
+          )}
 
           {/* Driver Name */}
           <div>

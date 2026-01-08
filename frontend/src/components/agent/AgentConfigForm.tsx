@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Save, Loader2, Volume2, Mic, Zap, VolumeX, Clock, Cpu, Radio } from 'lucide-react';
+import { Settings, Save, Loader2, Volume2, Mic, Zap, VolumeX, Clock, Cpu } from 'lucide-react';
 import {
   Button,
   Input,
@@ -11,7 +11,7 @@ import {
   CardContent
 } from '@/components/ui';
 import { agentApi } from '@/lib/api';
-import type { Agent, AgentCreate, VoiceSettings, VoiceSystem, PipelineConfig } from '@/types';
+import type { Agent, AgentCreate, VoiceSettings, VoiceSystem } from '@/types';
 
 interface AgentConfigFormProps {
   agent?: Agent;
@@ -66,6 +66,7 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
       },
       llm_config: {
         service: 'openai',
+        model: 'gpt-4o',
         openai: {
           model: 'gpt-4o',
           temperature: 0.7
@@ -222,11 +223,11 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Radio className="w-5 h-5" />
+              <Zap className="w-5 h-5" />
               Pipecat Pipeline Configuration
             </CardTitle>
             <CardDescription>
-              Configure STT, TTS, LLM services and transport for Pipecat
+              Configure STT, TTS, LLM services for Pipecat
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -275,7 +276,7 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
                         : 'best'
                     }
                     onChange={(e) => {
-                      const service = formData.pipeline_config.stt_config.service;
+                      const service = formData.pipeline_config!.stt_config.service;
                       setFormData(prev => ({
                         ...prev,
                         pipeline_config: {
@@ -366,7 +367,7 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
                         : formData.pipeline_config.tts_config.azure_tts?.voice || 'en-US-AriaNeural'
                     }
                     onChange={(e) => {
-                      const service = formData.pipeline_config.tts_config.service;
+                      const service = formData.pipeline_config!.tts_config.service;
                       setFormData(prev => ({
                         ...prev,
                         pipeline_config: {
@@ -423,7 +424,7 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
                         : 'standard'
                     }
                     onChange={(e) => {
-                      const service = formData.pipeline_config.tts_config.service;
+                      const service = formData.pipeline_config!.tts_config.service;
                       setFormData(prev => ({
                         ...prev,
                         pipeline_config: {
@@ -486,7 +487,7 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
                   }
                   onChange={(e) => {
                     const speed = parseFloat(e.target.value);
-                    const service = formData.pipeline_config.tts_config.service;
+                    const service = formData.pipeline_config!.tts_config.service;
                     setFormData(prev => ({
                       ...prev,
                       pipeline_config: {
@@ -548,7 +549,7 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
                   <select
                     value={formData.pipeline_config.llm_config.model}
                     onChange={(e) => {
-                      const service = formData.pipeline_config.llm_config.service;
+                      const service = formData.pipeline_config!.llm_config.service;
                       setFormData(prev => ({
                         ...prev,
                         pipeline_config: {
@@ -584,33 +585,6 @@ export function AgentConfigForm({ agent, onSaved }: AgentConfigFormProps) {
                     )}
                   </select>
                 </div>
-              </div>
-            </div>
-
-            {/* Transport Configuration */}
-            <div className="space-y-3">
-              <h4 className="font-semibold flex items-center gap-2">
-                <Radio className="w-4 h-4" />
-                Transport
-              </h4>
-              <div>
-                <select
-                  value={formData.pipeline_config.transport}
-                  onChange={(e) => setFormData(prev => ({
-                    ...prev,
-                    pipeline_config: {
-                      ...prev.pipeline_config!,
-                      transport: e.target.value as any
-                    }
-                  }))}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="daily_webrtc">Daily.co WebRTC (Recommended)</option>
-                  <option value="websocket">WebSocket</option>
-                </select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  WebRTC provides better audio quality and lower latency
-                </p>
               </div>
             </div>
           </CardContent>

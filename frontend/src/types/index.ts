@@ -269,6 +269,7 @@ export interface Call {
   updated_at: string;
   ended_at: string | null;
   results: CallResults | null;
+  transport: TransportType;
 }
 
 export interface CallListResponse {

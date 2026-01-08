@@ -1,6 +1,8 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { PipecatClient } from '@pipecat-ai/client-js';
 import { DailyTransport } from '@pipecat-ai/daily-transport';
+import { WebSocketTransport } from '@pipecat-ai/websocket-transport';
+
 import {
   PipecatClientProvider,
   usePipecatClient,
@@ -30,22 +32,25 @@ type CallState = 'idle' | 'connecting' | 'connected' | 'ended' | 'error';
 
 // Main component wrapper with provider
 export function PipecatCallInterface({ call, onCallEnded }: PipecatCallInterfaceProps) {
-  // Create client instance with Daily transport
+  // Create client instance with appropriate transport
   const client = useMemo(() => {
-    console.log('[Pipecat] Creating PipecatClient...');
+    console.log('[Pipecat] Creating client with transport:', call.transport);
     try {
-      const newClient = new PipecatClient({
-        transport: new DailyTransport(),
+      // Use WebSocket transport if specified, otherwise default to Daily WebRTC
+      const transport = call.transport === 'websocket' 
+        ? new WebSocketTransport()
+        : new DailyTransport();
+
+      return new PipecatClient({
+        transport,
         enableMic: true,
         enableCam: false,
       });
-      console.log('[Pipecat] Client created successfully:', newClient);
-      return newClient;
     } catch (err) {
       console.error('[Pipecat] Failed to create client:', err);
       throw err;
     }
-  }, []);
+  }, [call.transport]);
 
   console.log('[Pipecat] Rendering PipecatCallInterface with client:', client);
 
@@ -135,12 +140,12 @@ function PipecatCallInterfaceInner({ call, onCallEnded }: PipecatCallInterfacePr
       setIsAgentSpeaking(false);
     };
 
-    const handleUserTranscription = (transcript: any) => {
-      console.log('[Pipecat Event] User transcript:', transcript);
+    const handleUserTranscript = (data: any) => {
+      console.log('[Pipecat Event] User transcript:', data);
     };
 
-    const handleBotTranscription = (transcript: any) => {
-      console.log('[Pipecat Event] Bot transcript:', transcript);
+    const handleBotTranscript = (data: any) => {
+      console.log('[Pipecat Event] Bot transcript:', data);
     };
 
     // Set up event listeners
@@ -150,8 +155,8 @@ function PipecatCallInterfaceInner({ call, onCallEnded }: PipecatCallInterfacePr
     client.on('botReady', handleBotReady);
     client.on('botStartedSpeaking', handleBotStartedSpeaking);
     client.on('botStoppedSpeaking', handleBotStoppedSpeaking);
-    client.on('userTranscription', handleUserTranscription);
-    client.on('botTranscription', handleBotTranscription);
+    client.on('userTranscript', handleUserTranscript);
+    client.on('botTranscript', handleBotTranscript);
 
     return () => {
       client.off('connected', handleConnected);
@@ -160,8 +165,8 @@ function PipecatCallInterfaceInner({ call, onCallEnded }: PipecatCallInterfacePr
       client.off('botReady', handleBotReady);
       client.off('botStartedSpeaking', handleBotStartedSpeaking);
       client.off('botStoppedSpeaking', handleBotStoppedSpeaking);
-      client.off('userTranscription', handleUserTranscription);
-      client.off('botTranscription', handleBotTranscription);
+      client.off('userTranscript', handleUserTranscript);
+      client.off('botTranscript', handleBotTranscript);
     };
   }, [client, call.access_token, onCallEnded, callState, endSessionOnBackend]);
 

@@ -58,6 +58,7 @@ class CallTriggerRequest(BaseModel):
     destination: Optional[str] = Field(None, description="Destination location")
     expected_eta: Optional[str] = Field(None, description="Expected arrival time")
     additional_context: Optional[Dict[str, Any]] = Field(None, description="Additional context data")
+    transport: Optional[str] = Field(None, description="Transport type")
 
 
 class CallBase(BaseModel):
@@ -85,6 +86,7 @@ class CallResponse(CallBase):
     duration_seconds: Optional[int] = None
     transcript: Optional[str] = None
     recording_url: Optional[str] = None
+    transport: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     ended_at: Optional[datetime] = None

@@ -15,7 +15,7 @@ from app.schemas.call import (
     CallResultsResponse,
 )
 from app.schemas.agent import VoiceSystem
-from app.schemas.pipeline import PipecatCallRequest
+from app.schemas.pipeline import (PipecatCallRequest, TransportType)
 from app.services.call_service import get_call_service
 from app.services.agent_service import get_agent_service
 
@@ -102,7 +102,8 @@ async def trigger_call(request: CallTriggerRequest):
             pipecat_response = await pipecat_service.start_call(
                 request=pipecat_request,
                 agent_config=pipeline_config,
-                system_prompt=agent.system_prompt
+                system_prompt=agent.system_prompt,
+                transport=TransportType(request.transport)
             )
 
             # Create call record in database
@@ -118,6 +119,7 @@ async def trigger_call(request: CallTriggerRequest):
                 "destination": request.destination,
                 "status": CallStatus.PENDING.value,
                 "retell_call_id": pipecat_response.session_id,  # Store session_id here
+                "transport": request.transport,
                 "created_at": now.isoformat(),
                 "updated_at": now.isoformat(),
             }

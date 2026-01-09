@@ -131,47 +131,47 @@ class PipelineOrchestrator:
             # Always perform cleanup and database update
             await self._finalize_session(session)
     
-    async def run_websocket_pipeline(self, session: PipecatSessionState, websocket) -> None:
-        """
-        Run a complete WebSocket pipeline for a session.
+    # async def run_websocket_pipeline(self, session: PipecatSessionState, websocket) -> None:
+    #     """
+    #     Run a complete WebSocket pipeline for a session.
         
-        This method:
-        1. Creates all pipeline components (STT, TTS, LLM, WebSocket transport)
-        2. Assembles the pipeline with transcript capture
-        3. Runs the pipeline
-        4. Handles errors and cleanup
-        5. Updates database on completion
+    #     This method:
+    #     1. Creates all pipeline components (STT, TTS, LLM, WebSocket transport)
+    #     2. Assembles the pipeline with transcript capture
+    #     3. Runs the pipeline
+    #     4. Handles errors and cleanup
+    #     5. Updates database on completion
         
-        Args:
-            session: Session state with configuration and context
-            websocket: WebSocket connection object
-        """
-        if not PIPECAT_AVAILABLE:
-            raise Exception("Pipecat not available")
+    #     Args:
+    #         session: Session state with configuration and context
+    #         websocket: WebSocket connection object
+    #     """
+    #     if not PIPECAT_AVAILABLE:
+    #         raise Exception("Pipecat not available")
         
-        logger.info(f"[PIPELINE] Starting WebSocket pipeline for session: {session.session_id}")
+    #     logger.info(f"[PIPELINE] Starting WebSocket pipeline for session: {session.session_id}")
         
-        try:
-            # Create pipeline components
-            pipeline = await self._create_websocket_pipeline(session, websocket)
-            session.pipeline = pipeline
+    #     try:
+    #         # Create pipeline components
+    #         pipeline = await self._create_websocket_pipeline(session, websocket)
+    #         session.pipeline = pipeline
             
-            # Create and configure task
-            task = self._create_pipeline_task(pipeline, session)
-            session.task = task
+    #         # Create and configure task
+    #         task = self._create_pipeline_task(pipeline, session)
+    #         session.task = task
             
-            # Run pipeline
-            await self._run_pipeline_task(task, session)
+    #         # Run pipeline
+    #         await self._run_pipeline_task(task, session)
             
-            logger.info(f"[PIPELINE] WebSocket pipeline completed for session: {session.session_id}")
+    #         logger.info(f"[PIPELINE] WebSocket pipeline completed for session: {session.session_id}")
             
-        except Exception as e:
-            logger.error(f"[PIPELINE] WebSocket pipeline error for session {session.session_id}: {e}", exc_info=True)
-            raise
+    #     except Exception as e:
+    #         logger.error(f"[PIPELINE] WebSocket pipeline error for session {session.session_id}: {e}", exc_info=True)
+    #         raise
         
-        finally:
-            # Always perform cleanup and database update
-            await self._finalize_session(session)
+    #     finally:
+    #         # Always perform cleanup and database update
+    #         await self._finalize_session(session)
     
     async def _create_pipeline(self, session: PipecatSessionState) -> Pipeline:
         """

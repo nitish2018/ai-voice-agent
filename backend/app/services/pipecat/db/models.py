@@ -7,6 +7,7 @@ in the Pipecat service layer.
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
+from enum import Enum
 
 
 class CallUpdateData(BaseModel):
@@ -34,6 +35,12 @@ class CallUpdateData(BaseModel):
             }
         }
 
+class EmergencyType(str, Enum):
+    """Types of emergencies."""
+    ACCIDENT = "Accident"
+    BREAKDOWN = "Breakdown"
+    MEDICAL = "Medical"
+    OTHER = "Other"
 
 class CallResultsData(BaseModel):
     """
@@ -52,6 +59,13 @@ class CallResultsData(BaseModel):
     emergency_type: Optional[str] = Field(None, description="Type of emergency if applicable")
     confidence_score: Optional[float] = Field(None, description="Confidence in extraction")
     raw_extraction: Optional[Dict[str, Any]] = Field(None, description="Raw extraction data including cost")
+    emergency_type: EmergencyType = EmergencyType.OTHER
+    safety_status: Optional[str] = None
+    injury_status: Optional[str] = None
+    emergency_location: Optional[str] = None
+    load_secure: Optional[bool] = None
+    escalation_status: str = "Pending"
+    pod_reminder_acknowledged: bool = False
     
     class Config:
         """Pydantic configuration."""

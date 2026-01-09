@@ -30,29 +30,47 @@ interface PipecatCallInterfaceProps {
 
 type CallState = 'idle' | 'connecting' | 'connected' | 'ended' | 'error';
 
+const WS_URL = 'ws://localhost:8765';
+
 // Main component wrapper with provider
 export function PipecatCallInterface({ call, onCallEnded }: PipecatCallInterfaceProps) {
-  // Create client instance with appropriate transport
   const client = useMemo(() => {
-    console.log('[Pipecat] Creating client with transport:', call.transport);
-    try {
-      // Use WebSocket transport if specified, otherwise default to Daily WebRTC
-      const transport = call.transport === 'websocket' 
-        ? new WebSocketTransport()
-        : new DailyTransport();
+    console.group('[Pipecat] Initializing PipecatClient');
+    console.log('[Pipecat] Call ID:', call.id);
+    console.log('[Pipecat] Requested transport:', call.transport);
 
-      return new PipecatClient({
+    try {
+      let transport;
+
+      if (call.transport === 'websocket') {
+        console.log('[Pipecat] Using WebSocketTransport');
+        transport = new WebSocketTransport();
+      } else {
+        console.log('[Pipecat] Using DailyTransport');
+        transport = new DailyTransport();
+      }
+
+      const client = new PipecatClient({
         transport,
         enableMic: true,
         enableCam: false,
       });
-    } catch (err) {
-      console.error('[Pipecat] Failed to create client:', err);
-      throw err;
-    }
-  }, [call.transport]);
 
-  console.log('[Pipecat] Rendering PipecatCallInterface with client:', client);
+      console.log('[Pipecat] PipecatClient created successfully');
+      console.groupEnd();
+
+      return client;
+    } catch (error) {
+      console.error('[Pipecat] Failed to create PipecatClient');
+      console.error(error);
+      console.groupEnd();
+
+      // Fail fast – this should not be silently swallowed
+      throw error;
+    }
+  }, [call.transport, call.id]);
+
+  console.log('[Pipecat] Rendering PipecatCallInterface');
 
   return (
     <PipecatClientProvider client={client}>
@@ -60,6 +78,7 @@ export function PipecatCallInterface({ call, onCallEnded }: PipecatCallInterface
     </PipecatClientProvider>
   );
 }
+
 
 // Inner component that uses the hooks
 function PipecatCallInterfaceInner({ call, onCallEnded }: PipecatCallInterfaceProps) {
@@ -204,8 +223,8 @@ function PipecatCallInterfaceInner({ call, onCallEnded }: PipecatCallInterfacePr
   }, [transportState, callState, onCallEnded, endSessionOnBackend]);
 
   const startCall = useCallback(async () => {
-    if (!client || !call.access_token) {
-      setError('No Daily.co room URL available for this call');
+    if (!client) {
+      setError('No client available for this call');
       return;
     }
 
@@ -213,16 +232,24 @@ function PipecatCallInterfaceInner({ call, onCallEnded }: PipecatCallInterfacePr
       setCallState('connecting');
       setError(null);
 
-      console.log('[Pipecat] Starting call with URL:', call.access_token);
-      console.log('[Pipecat] Calling client.connect()...');
-
       // Initialize devices (request mic permissions)
       console.log('[Pipecat] Initializing devices...');
       await client.initDevices();
       console.log('[Pipecat] Devices initialized');
 
-      // Connect to Daily.co room via Pipecat client
-      await client.connect({ url: call.access_token });
+      // Connect to the appropriate transport
+      if (call.transport === 'websocket') {
+        console.log('[Pipecat] Connecting via WebSocket:', call.access_token);
+        await client.connect({
+          ws_url: WS_URL,
+        });
+      } else {
+        console.log('[Pipecat] Connecting via Daily WebRTC:', call.access_token);
+        await client.connect({
+          url: call.access_token,
+        });
+      }
+
       console.log('[Pipecat] Client.connect() completed');
 
     } catch (err) {

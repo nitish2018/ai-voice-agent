@@ -79,7 +79,8 @@ class PipecatService:
         self,
         request: PipecatCallRequest,
         agent_config: PipelineConfig,
-        system_prompt: str
+        system_prompt: str,
+        transport: TransportType
     ) -> PipecatCallResponse:
         """
         Start a new Pipecat call session.
@@ -125,12 +126,13 @@ class PipecatService:
         )
         
         # Route to appropriate transport
-        if agent_config.transport == TransportType.DAILY_WEBRTC:
+        if transport == TransportType.DAILY_WEBRTC:
             return await self._start_daily_call(session)
-        elif agent_config.transport == TransportType.WEBSOCKET:
+        elif transport == TransportType.WEBSOCKET:
             return await self._start_websocket_call(session)
         else:
             raise Exception(f"Unsupported transport type: {agent_config.transport}")
+        
     
     async def _start_daily_call(self, session) -> PipecatCallResponse:
         """

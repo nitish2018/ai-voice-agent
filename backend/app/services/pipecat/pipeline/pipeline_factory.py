@@ -11,9 +11,9 @@ import logging
 from typing import Any
 
 from app.schemas.pipeline import PipelineConfig
-from .stt import get_stt_service_factory
-from .tts import get_tts_service_factory
-from .llm import get_llm_service_factory
+from app.services.pipecat.stt import get_stt_service_factory
+from app.services.pipecat.tts import get_tts_service_factory
+from app.services.pipecat.llm import get_llm_service_factory
 
 logger = logging.getLogger(__name__)
 

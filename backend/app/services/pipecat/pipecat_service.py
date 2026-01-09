@@ -14,14 +14,14 @@ from app.schemas.pipeline import (
     PipecatCallRequest,
     TransportType,
 )
-from .session_manager import get_session_manager
-from .transport.webrtc.daily_room_service import get_daily_room_service
-from .text_processor import get_text_processor
+from app.services.pipecat.session.session_manager import get_session_manager
+from app.services.pipecat.transport.webrtc.daily_room_service import get_daily_room_service
+from app.services.pipecat.utils.text_processor import get_text_processor
 from .pipeline.pipeline_orchestrator import get_pipeline_orchestrator
-from .call_completion_service import get_call_completion_service
+from app.services.pipecat.call.call_completion_service import get_call_completion_service
 from app.services.cost import get_cost_calculator
-from .transport.registry import TransportRegistry
-from .pipeline.pipeline_utils import PipecatSessionUtils
+from app.services.pipecat.transport.registry import TransportRegistry
+from app.services.pipecat.pipeline.pipeline_utils import PipecatSessionUtils
 
 logger = logging.getLogger(__name__)
 

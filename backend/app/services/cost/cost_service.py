@@ -1,5 +1,5 @@
 import logging
-from app.services.pipecat.session_manager import PipecatSessionState
+from app.services.pipecat.session.session_manager import PipecatSessionState
 from app.schemas.call import CallResultsCreate
 from .cost_calculator import get_cost_calculator
 from typing import Dict, Any

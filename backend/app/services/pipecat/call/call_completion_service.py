@@ -10,10 +10,10 @@ from datetime import datetime
 
 from app.services.cost.cost_service import CostService
 
-from .session_manager import PipecatSessionState
-from .db import get_db_connector
-from .db.models import CallUpdateData, CallResultsData, CallContext
-from .transcript_formatter import get_transcript_formatter
+from app.services.pipecat.session.session_manager import PipecatSessionState
+from app.services.pipecat.db.supabase_connector import get_db_connector
+from app.services.pipecat.db.models import CallUpdateData, CallResultsData, CallContext
+from app.services.pipecat.transcript.transcript_formatter import get_transcript_formatter
 from app.schemas.call import CallResultsCreate, CallStatus
 from app.services.cost.cost_calculator import get_cost_calculator
 
@@ -199,7 +199,7 @@ class CallCompletionService:
             return self._get_default_results(call_id)
         
         try:
-            from app.services.transcript_processor import get_transcript_processor
+            from app.services.pipecat.transcript.transcript_processor import get_transcript_processor
             
             # Get call details for context
             call_record = await self.db_connector.get_call_by_id(call_id)

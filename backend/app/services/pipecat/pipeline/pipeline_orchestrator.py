@@ -12,9 +12,9 @@ from typing import Optional
 from .pipeline_builder import PipelineBuilder
 from ..transport.transport_factory import TransportFactory
 from .pipeline_executor import PipelineExecutor
-from ..session_finalizer import SessionFinalizer
-from ..pipeline_factory import get_pipeline_factory
-from ..call_completion_service import get_call_completion_service
+from app.services.pipecat.session.session_finalizer import SessionFinalizer
+from .pipeline_factory import get_pipeline_factory
+from app.services.pipecat.call.call_completion_service import get_call_completion_service
 
 logger = logging.getLogger(__name__)
 

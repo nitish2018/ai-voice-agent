@@ -18,7 +18,7 @@ from app.schemas.call import (
 )
 from app.services.retell_service import get_retell_service
 from app.services.agent_service import get_agent_service
-from app.services.transcript_processor import get_transcript_processor
+from app.services.pipecat.transcript.transcript_processor import get_transcript_processor
 
 logger = logging.getLogger(__name__)
 

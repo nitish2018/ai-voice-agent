@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from datetime import datetime
 
 if TYPE_CHECKING:
-    from .session_manager import PipecatSessionState
+    from app.services.pipecat.session.session_manager import PipecatSessionState
 
 logger = logging.getLogger(__name__)
 

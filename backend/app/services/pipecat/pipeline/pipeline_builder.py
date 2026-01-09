@@ -9,7 +9,7 @@ import logging
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 
-from ..transcript_capture import create_transcript_processor
+from app.services.pipecat.transcript.transcript_capture import create_transcript_processor
 from ..transport.transport_factory import TransportFactory
 
 logger = logging.getLogger(__name__)

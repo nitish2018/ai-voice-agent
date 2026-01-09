@@ -15,7 +15,7 @@ import asyncio
 import logging
 from typing import Dict, Any
 
-from ...cost.cost_calculator import get_cost_calculator
+from app.services.cost.cost_calculator import get_cost_calculator
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class PipecatSessionUtils:
             session.metrics_saved = True
 
     @classmethod
-    def build_session_result(cls, session) -> Dict[str, Any]:
+    async def build_session_result(cls, session) -> Dict[str, Any]:
         """
         Build final session response payload.
         """

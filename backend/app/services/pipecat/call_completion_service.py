@@ -15,7 +15,7 @@ from .db import get_db_connector
 from .db.models import CallUpdateData, CallResultsData, CallContext
 from .transcript_formatter import get_transcript_formatter
 from app.schemas.call import CallResultsCreate, CallStatus
-from app.services.cost_calculator import get_cost_calculator
+from app.services.cost.cost_calculator import get_cost_calculator
 
 logger = logging.getLogger(__name__)
 

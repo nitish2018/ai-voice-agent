@@ -26,8 +26,11 @@ router = APIRouter(prefix="/calls", tags=["calls"])
 # Check if Pipecat is available
 try:
     from app.services.pipecat import get_pipecat_service
+    # from app.services.pipecat.pipecat_service import get_pipecat_service
+
     PIPECAT_AVAILABLE = True
 except ImportError:
+    logger.exception("Pipecat service import failed")
     PIPECAT_AVAILABLE = False
     logger.warning("Pipecat service not available")
 

@@ -1,7 +1,7 @@
 import logging
 from app.services.pipecat.session_manager import PipecatSessionState
 from app.schemas.call import CallResultsCreate
-from app.services.cost_calculator import get_cost_calculator
+from .cost_calculator import get_cost_calculator
 from typing import Dict, Any
 
 logger = logging.getLogger(__name__)

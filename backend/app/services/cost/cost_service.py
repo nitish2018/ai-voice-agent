@@ -81,8 +81,6 @@ class CostService:
         """
         # Get existing raw extraction or create new dict
         existing_raw = results_data.raw_extraction or {}
-
-        logger.info(f"************************ results_data: {results_data} ************************")
         
         if isinstance(existing_raw, dict):
             existing_raw["cost_breakdown"] = cost_breakdown

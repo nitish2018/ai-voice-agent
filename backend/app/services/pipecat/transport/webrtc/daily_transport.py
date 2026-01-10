@@ -42,7 +42,7 @@ class DailyPipecatTransport(PipecatTransport):
 
         # Start pipeline asynchronously
         asyncio.create_task(
-            self.pipeline_orchestrator.run_daily_pipeline(session)
+            self.pipeline_orchestrator.run_pipeline(session)
         )
 
         # Small delay so bot joins cleanly

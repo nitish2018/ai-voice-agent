@@ -12,6 +12,9 @@ from pipecat.transports.websocket.server import (
 )
 from pipecat.serializers.protobuf import ProtobufFrameSerializer
 from pipecat.audio.vad.silero import SileroVADAnalyzer
+from app.services.pipecat.transport.base import PipecatTransport
+from app.services.pipecat.session.session_manager import PipecatSessionState
+from app.schemas.pipeline import TransportType
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +23,18 @@ class TransportFactory:
     """
     Factory responsible for transport instantiation.
     """
+    def create_transport(self, session: PipecatSessionState) -> PipecatTransport:
+        """
+        Create a transport based on the pipeline configuration.
+        """
+        if session.transport == TransportType.DAILY_WEBRTC:
+            return self.create_daily(session)
+        elif session.transport == TransportType.WEBSOCKET:
+            return self.create_pipecat_managed_ws()
+        else:
+            raise ValueError(f"Unsupported transport: {session.transport}")
 
-    def create_daily(self, session) -> DailyTransport:
+    def create_daily(self, session: PipecatSessionState) -> DailyTransport:
         """
         Create Daily WebRTC transport.
         """

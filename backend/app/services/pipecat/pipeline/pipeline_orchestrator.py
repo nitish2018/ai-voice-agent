@@ -9,11 +9,11 @@ actual work to SRP-compliant collaborators.
 import logging
 from typing import Optional
 
-from .pipeline_builder import PipelineBuilder
-from ..transport.transport_factory import TransportFactory
-from .pipeline_executor import PipelineExecutor
+from app.services.pipecat.pipeline.pipeline_builder import PipelineBuilder
+from app.services.pipecat.transport.transport_factory import TransportFactory
+from app.services.pipecat.pipeline.pipeline_executor import PipelineExecutor
 from app.services.pipecat.session.session_finalizer import SessionFinalizer
-from .pipeline_factory import get_pipeline_factory
+from app.services.pipecat.pipeline.pipeline_factory import get_pipeline_factory
 from app.services.pipecat.call.call_completion_service import get_call_completion_service
 
 logger = logging.getLogger(__name__)
@@ -44,37 +44,20 @@ class PipelineOrchestrator:
         )
 
         logger.info("PipelineOrchestrator initialized")
-
-    async def run_daily_pipeline(self, session) -> None:
+    
+    async def run_pipeline(self, session) -> None:
         """
-        Run a Daily WebRTC pipeline.
+        Run a pipeline.
 
         Execution flow:
         1. Build pipeline
         2. Execute pipeline
         3. Finalize session (always)
         """
-        logger.info(f"[PIPELINE] Starting Daily pipeline for session {session.session_id}")
-
+        logger.info(f"[PIPELINE] Starting {session.transport.name} pipeline for session {session.session_id}")
+        
         try:
-            pipeline = self.pipeline_builder.build_daily(session)
-            session.pipeline = pipeline
-            await self.pipeline_executor.run(pipeline, session)
-        finally:
-            await self.session_finalizer.finalize(session)
-
-    async def run_pipecat_managed_ws_pipeline(self, session) -> None:
-        """
-        Run a Pipecat-managed WebSocket pipeline.
-
-        Execution flow mirrors Daily pipeline, but uses server-side WS transport.
-        """
-        logger.info(
-            f"[PIPELINE] Starting Pipecat-managed WS pipeline for session {session.session_id}"
-        )
-
-        try:
-            pipeline = await self.pipeline_builder.build_pipecat_ws(session)
+            pipeline = self.pipeline_builder.build(session)
             session.pipeline = pipeline
             await self.pipeline_executor.run(pipeline, session)
         finally:

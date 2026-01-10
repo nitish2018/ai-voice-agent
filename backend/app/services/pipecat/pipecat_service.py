@@ -7,7 +7,7 @@ transport-specific behavior to transport strategies.
 
 import logging
 import uuid
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 
 from app.schemas.pipeline import (
     PipelineConfig,
@@ -77,6 +77,7 @@ class PipecatService:
             call_id=request.agent_id,
             config=agent_config,
             system_prompt=system_prompt_filled,
+            transport=transport,
         )
 
         # Delegate to transport strategy

@@ -24,7 +24,7 @@ class WebSocketPipecatTransport(PipecatTransport):
         )
 
         asyncio.create_task(
-            self.pipeline_orchestrator.run_pipecat_managed_ws_pipeline(session)
+            self.pipeline_orchestrator.run_pipeline(session)
         )
 
         return PipecatCallResponse(

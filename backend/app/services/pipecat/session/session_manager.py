@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from app.schemas.pipeline import PipelineConfig
 from app.schemas.session import PipecatSessionData, SessionTransport, SessionMetrics
+from app.schemas.pipeline import TransportType
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +138,8 @@ class SessionManager:
         session_id: str,
         call_id: str,
         config: PipelineConfig,
-        system_prompt: str
+        system_prompt: str,
+        transport: TransportType
     ) -> PipecatSessionState:
         """
         Create a new session.
@@ -155,7 +157,8 @@ class SessionManager:
             session_id=session_id,
             call_id=call_id,
             config=config,
-            system_prompt=system_prompt
+            system_prompt=system_prompt,
+            transport=transport,
         )
         
         self.active_sessions[session_id] = session
